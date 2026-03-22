@@ -155,4 +155,80 @@
                 if (!gameOver && playerAmmo > 0) {
                     playerAmmo--;
                     let balaRect = this.add.rectangle(player.x, player.y, 10, 10, 0x00e5ff);
-                    let bala = balas.create(player.x, player.y, null).setSize(10,
+                    let bala = balas.create(player.x, player.y, null).setSize(10, 10);
+                    bala.setData('rect', balaRect);
+                    this.physics.moveToObject(bala, pointer, 500);
+                } else if (!gameOver) {
+                    player.setFillStyle(0xff0000);
+                    this.time.delayedCall(100, () => player.setFillStyle(0x00ff41));
+                }
+            });
+        }
+
+        // --- Funciones para el juego ---
+        function spawnVirus() {
+            if (gameOver) return;
+
+            // Posición aleatoria en los bordes del mundo grande
+            let side = Phaser.Math.Between(0, 3); // 0: arriba, 1: derecha, 2: abajo, 3: izquierda
+            let x, y;
+            switch (side) {
+                case 0: x = Phaser.Math.Between(0, 1600); y = 0; break;
+                case 1: x = 1600; y = Phaser.Math.Between(0, 900); break;
+                case 2: x = Phaser.Math.Between(0, 1600); y = 900; break;
+                case 3: x = 0; y = Phaser.Math.Between(0, 900); break;
+            }
+
+            let visualVirus = this.add.rectangle(x, y, 25, 25, 0xff003c); // Rojo intenso
+            let virus = viruses.create(x, y, null).setSize(25, 25);
+            virus.setData('visual', visualVirus);
+            virus.setCollideWorldBounds(true);
+        }
+
+        function update(time) {
+            if (gameOver) return; // Si game over, no actualizamos nada
+
+            player.body.setVelocity(0);
+            let speed = 250;
+
+            // Movimiento del jugador
+            if (cursors.left.isDown || wasd.A.isDown) player.body.setVelocityX(-speed);
+            else if (cursors.right.isDown || wasd.D.isDown) player.body.setVelocityX(speed);
+            if (cursors.up.isDown || wasd.W.isDown) player.body.setVelocityY(-speed);
+            else if (cursors.down.isDown || wasd.S.isDown) player.body.setVelocityY(speed);
+
+            // Recarga de munición
+            if (playerAmmo < 3 && time > lastReload + 1500) {
+                playerAmmo++;
+                lastReload = time;
+            }
+
+            // Actualizar posición de la barra de vida sobre el jugador
+            healthBar.x = player.x;
+            healthBar.y = player.y - 30;
+            healthBar.width = (playerHP / 100) * 40;
+            healthBar.fillColor = (playerHP > 50) ? 0x00ff00 : (playerHP > 20 ? 0xffa500 : 0xff0000); // Verde, Naranja, Rojo
+
+            // Actualizar visual de balas
+            balas.getChildren().forEach(bala => {
+                let rect = bala.getData('rect');
+                if (rect) { rect.x = bala.x; rect.y = bala.y; }
+                if (bala.x < 0 || bala.x > 1600 || bala.y < 0 || bala.y > 900) { // Borrar si se sale del mundo grande
+                    rect.destroy();
+                    bala.destroy();
+                }
+            });
+
+            // Movimiento de los Virus: persiguen al jugador
+            viruses.getChildren().forEach(virus => {
+                this.physics.moveToObject(virus, player, 100); // Velocidad del virus
+                let visual = virus.getData('visual');
+                if (visual) {
+                    visual.x = virus.x;
+                    visual.y = virus.y;
+                }
+            });
+        }
+    </script>
+</body>
+</html>
