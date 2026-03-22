@@ -2,27 +2,27 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>GLITCH ARENA - IA & Survival Fix</title>
+    <title>GLITCH ARENA - Central Core</title>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-arcade-physics.min.js"></script>
     <style>
         body { margin: 0; background-color: #050505; color: #00ff41; font-family: 'Courier New', monospace; overflow: hidden; display: flex; flex-direction: column; align-items: center; }
-        canvas { border: 2px solid #ff003c; box-shadow: 0 0 20px #ff003c; margin-top: 10px; }
+        canvas { border: 2px solid #00e5ff; box-shadow: 0 0 20px #00e5ff; margin-top: 10px; }
         .ui-container { text-align: center; pointer-events: none; margin-top: 10px; }
         #superReady { color: #00e5ff; font-weight: bold; visibility: hidden; text-shadow: 0 0 8px #00e5ff; }
     </style>
 </head>
 <body>
     <div class="ui-container">
-        <h1 style="margin:0;">[ GLITCH ARENA ]</h1>
-        <p style="margin:5px;">Súper: <span id="sCount">0</span>/5 | <span id="superReady">¡SÚPER LISTO! (ESPACIO)</span></p>
+        <h1 style="margin:0;">[ CORE ARENA ]</h1>
+        <p style="margin:5px;">Súper: <span id="sCount">0</span>/5 | <span id="superReady">¡SÚPER LISTO!</span></p>
     </div>
 
     <script>
         const config = {
             type: Phaser.AUTO,
-            width: 800,
-            height: 450,
-            backgroundColor: '#0a0a0a',
+            width: 1000, // Pantalla más ancha
+            height: 550,
+            backgroundColor: '#050505',
             physics: { default: 'arcade', arcade: { debug: false } },
             scene: { preload: preload, create: create, update: update }
         };
@@ -31,43 +31,56 @@
         let player, spaceKey, wasd, cursors, balas, bloques, viruses, pulseRing;
         let playerHP = 100, playerAmmo = 3, kills = 0, lastReload = 0;
         let lastActionTime = 0, superReady = false, healthBar, ammoBars = [];
-        let isInvulnerable = false; // Para evitar muerte instantánea
+        let isInvulnerable = false;
 
         function preload() {}
 
         function create() {
-            this.physics.world.setBounds(0, 0, 1600, 1200);
-            this.cameras.main.setBounds(0, 0, 1600, 1200);
+            const WORLD_W = 1600;
+            const WORLD_H = 1200;
+            const CENTER_X = WORLD_W / 2;
+            const CENTER_Y = WORLD_H / 2;
+
+            this.physics.world.setBounds(0, 0, WORLD_W, WORLD_H);
+            
+            // --- CÁMARA CON ZOOM (Para ver más entorno) ---
+            this.cameras.main.setBounds(0, 0, WORLD_W, WORLD_H);
+            this.cameras.main.setZoom(0.8); // Zoom out para ver más mapa
 
             balas = this.physics.add.group();
             bloques = this.physics.add.staticGroup();
             viruses = this.physics.add.group();
 
-            // Muros Organizados
-            const wallSize = 40;
-            for (let i = 0; i < 40; i++) {
-                let startX = Phaser.Math.Between(300, 1500), startY = Phaser.Math.Between(300, 1100);
-                let esHor = Phaser.Math.Between(0, 1), largo = Phaser.Math.Between(3, 4);
-                for (let j = 0; j < largo; j++) {
-                    let posX = esHor ? startX + (j * wallSize) : startX;
-                    let posY = esHor ? startY : startY + (j * wallSize);
-                    if (posX < 1550 && posY < 1150) {
-                        let visual = this.add.rectangle(posX, posY, wallSize, wallSize, 0x1a1a1a).setStrokeStyle(2, 0x00ff41).setDepth(1);
-                        let b = bloques.create(posX, posY, null).setSize(wallSize, wallSize).refreshBody();
-                        b.setData('visual', visual).setVisible(false);
-                    }
+            // --- GENERACIÓN DE MAPA CENTRAL (RADIAL) ---
+            const wallSize = 30; // Muros más pequeños
+            for (let r = 150; r < 700; r += 150) { // Anillos de distancia
+                let steps = (r / 50) * 2;
+                for (let i = 0; i < steps; i++) {
+                    let angle = (Math.PI * 2 / steps) * i;
+                    // Saltamos algunos para crear pasillos
+                    if (i % 4 === 0) continue; 
+                    
+                    let px = CENTER_X + Math.cos(angle) * r;
+                    let py = CENTER_Y + Math.sin(angle) * r;
+                    
+                    let visual = this.add.rectangle(px, py, wallSize, wallSize, 0x0a0a0a)
+                                     .setStrokeStyle(1, 0x00ff41).setDepth(1);
+                    bloques.create(px, py, null).setSize(wallSize, wallSize).refreshBody().setData('visual', visual).setVisible(false);
                 }
             }
 
-            player = this.add.rectangle(120, 120, 25, 25, 0x00ff41).setDepth(10);
+            // --- BIT (Más pequeño: 20px) ---
+            player = this.add.rectangle(CENTER_X - 100, CENTER_Y - 100, 20, 20, 0x00ff41).setDepth(10);
             this.physics.add.existing(player);
             player.body.setCollideWorldBounds(true);
             this.cameras.main.startFollow(player, true, 0.1, 0.1);
 
-            healthBar = this.add.rectangle(0, 0, 40, 5, 0x00ff00).setDepth(11);
-            for(let i=0; i<3; i++) ammoBars[i] = this.add.rectangle(0, 0, 10, 3, 0x00e5ff).setDepth(11);
-            pulseRing = this.add.circle(0, 0, 10, 0x00e5ff, 0.4).setVisible(false).setDepth(5);
+            // UI y Efectos
+            healthBar = this.add.rectangle(0, 0, 30, 4, 0x00ff00).setDepth(11);
+            for(let i=0; i<3; i++) ammoBars[i] = this.add.rectangle(0, 0, 8, 3, 0x00e5ff).setDepth(11);
+            pulseRing = this.add.circle(0, 0, 10, 0x00e5ff, 0.3).setVisible(false).setDepth(5);
 
+            // Colisiones
             this.physics.add.collider(player, bloques);
             this.physics.add.collider(viruses, bloques);
             this.physics.add.collider(balas, bloques, (b) => { if(b.getData('r')) b.getData('r').destroy(); b.destroy(); });
@@ -76,30 +89,22 @@
                 virus.setData('hp', virus.getData('hp') - 20);
                 virus.getData('visual').setFillStyle(0xffffff);
                 this.time.delayedCall(50, () => { if(virus.active) virus.getData('visual').setFillStyle(0xff003c); });
-                virus.getData('hpBar').setVisible(true).width = (virus.getData('hp') / 60) * 25;
-                if(virus.getData('hp') <= 0) { destroyVirus(virus); updateKills(); }
+                virus.getData('hpBar').setVisible(true).width = (virus.getData('hp') / 60) * 20;
+                if(virus.getData('hp') <= 0) { destroyVirus(virus); updateKills(); checkWave(this); }
                 if(bala.getData('r')) bala.getData('r').destroy();
                 bala.destroy();
             });
 
-            // Colisión Jugador-Virus corregida
             this.physics.add.overlap(player, viruses, (p, v) => {
                 if (!isInvulnerable) {
                     playerHP -= 20;
                     lastActionTime = this.time.now;
-                    
-                    if (playerHP <= 0) {
-                        location.reload();
-                    } else {
-                        // Activar invulnerabilidad temporal
-                        isInvulnerable = true;
-                        player.setAlpha(0.5);
-                        this.time.delayedCall(1000, () => {
-                            isInvulnerable = false;
-                            player.setAlpha(1);
-                        });
-                        destroyVirus(v);
-                    }
+                    if (playerHP <= 0) location.reload();
+                    isInvulnerable = true;
+                    player.setAlpha(0.5);
+                    this.time.delayedCall(1000, () => { isInvulnerable = false; player.setAlpha(1); });
+                    destroyVirus(v);
+                    checkWave(this);
                 }
             });
 
@@ -112,33 +117,40 @@
                     playerAmmo--;
                     lastActionTime = this.time.now;
                     let p = pointer.positionToCamera(this.cameras.main);
-                    let r = this.add.rectangle(player.x, player.y, 8, 8, 0x00e5ff).setDepth(5);
-                    let b = balas.create(player.x, player.y, null).setSize(8, 8).setVisible(false);
+                    let r = this.add.rectangle(player.x, player.y, 6, 6, 0x00e5ff).setDepth(5);
+                    let b = balas.create(player.x, player.y, null).setSize(6, 6).setVisible(false);
                     b.setData('r', r).setData('startX', player.x).setData('startY', player.y);
                     this.physics.moveTo(b, p.x, p.y, 600);
                 }
             });
 
-            this.time.addEvent({ delay: 2000, callback: spawnVirus, callbackScope: this, loop: true });
-            
+            // Primera oleada
+            spawnWave(this);
+
             // Regeneración 15 HP/s
             this.time.addEvent({ 
                 delay: 1000, 
                 callback: () => {
-                    if (this.time.now - lastActionTime > 4000 && playerHP < 100) {
-                        playerHP = Math.min(100, playerHP + 15);
-                    }
+                    if (this.time.now - lastActionTime > 4000 && playerHP < 100) playerHP = Math.min(100, playerHP + 15);
                 }, loop: true 
             });
         }
 
-        function spawnVirus() {
-            let x = Phaser.Math.Between(400, 1500), y = Phaser.Math.Between(400, 1100);
-            let vVis = this.add.triangle(0, 0, 0, 24, 12, 0, 24, 24, 0xff003c).setDepth(5);
-            let vHpBar = this.add.rectangle(0, 0, 25, 4, 0xff0000).setDepth(6).setVisible(false);
-            let v = viruses.create(x, y, null).setSize(24, 24).setVisible(false);
-            v.setData('visual', vVis).setData('hpBar', vHpBar).setData('hp', 60);
-            v.setData('side', Phaser.Math.RND.pick([-1, 1])); // Lado preferido para rodear muros
+        function spawnWave(scene) {
+            for(let i=0; i<3; i++) {
+                // Aparecen en el centro (Core)
+                let x = 800, y = 600;
+                let vVis = scene.add.triangle(0, 0, 0, 20, 10, 0, 20, 20, 0xff003c).setDepth(5);
+                let vHpBar = scene.add.rectangle(0, 0, 20, 3, 0xff0000).setDepth(6).setVisible(false);
+                let v = viruses.create(x, y, null).setSize(20, 20).setVisible(false);
+                v.setData('visual', vVis).setData('hpBar', vHpBar).setData('hp', 60).setData('side', Phaser.Math.RND.pick([-1, 1]));
+            }
+        }
+
+        function checkWave(scene) {
+            if (viruses.countActive() === 0) {
+                scene.time.delayedCall(1500, () => spawnWave(scene));
+            }
         }
 
         function destroyVirus(v) {
@@ -157,7 +169,7 @@
 
         function update(time) {
             player.body.setVelocity(0);
-            let s = 300;
+            let s = 280;
             if (wasd.A.isDown || cursors.left.isDown) player.body.setVelocityX(-s);
             else if (wasd.D.isDown || cursors.right.isDown) player.body.setVelocityX(s);
             if (wasd.W.isDown || cursors.up.isDown) player.body.setVelocityY(-s);
@@ -180,17 +192,15 @@
             }
 
             if (playerAmmo < 3 && time > lastReload + 1200) { playerAmmo++; lastReload = time; }
-            healthBar.setPosition(player.x, player.y - 35).width = (playerHP/100)*40;
-            healthBar.setFillStyle(playerHP > 30 ? 0x00ff00 : 0xff0000);
-
+            healthBar.setPosition(player.x, player.y - 25).width = (playerHP/100)*30;
             for(let i=0; i<3; i++) {
-                ammoBars[i].setPosition(player.x - 14 + (i*14), player.y - 25);
+                ammoBars[i].setPosition(player.x - 10 + (i*10), player.y - 18);
                 ammoBars[i].visible = (i < playerAmmo);
             }
 
             balas.getChildren().forEach(b => { 
                 if(b.getData('r')) { b.getData('r').x = b.x; b.getData('r').y = b.y; }
-                if(Phaser.Math.Distance.Between(b.x, b.y, b.getData('startX'), b.getData('startY')) > 300) {
+                if(Phaser.Math.Distance.Between(b.x, b.y, b.getData('startX'), b.getData('startY')) > 350) {
                     if(b.getData('r')) b.getData('r').destroy(); b.destroy();
                 }
             });
@@ -198,40 +208,23 @@
             viruses.getChildren().forEach(v => {
                 if(!v.getData('st')) {
                     let angleToPlayer = Phaser.Math.Angle.Between(v.x, v.y, player.x, player.y);
-                    let vx = Math.cos(angleToPlayer) * 90;
-                    let vy = Math.sin(angleToPlayer) * 90;
+                    let vx = Math.cos(angleToPlayer) * 100;
+                    let vy = Math.sin(angleToPlayer) * 100;
 
-                    // IA de Rodear Muros (Sliding AI)
-                    let blocked = false;
                     bloques.getChildren().forEach(block => {
-                        let dist = Phaser.Math.Distance.Between(v.x, v.y, block.x, block.y);
-                        if(dist < 50) {
-                            blocked = true;
+                        if(Phaser.Math.Distance.Between(v.x, v.y, block.x, block.y) < 45) {
                             let pushAng = Phaser.Math.Angle.Between(block.x, block.y, v.x, v.y);
-                            // Si está bloqueado, intenta moverse lateralmente (tangente al muro)
-                            let side = v.getData('side');
-                            vx = Math.cos(pushAng + (Math.PI/2 * side)) * 110;
-                            vy = Math.sin(pushAng + (Math.PI/2 * side)) * 110;
+                            vx = Math.cos(pushAng + (Math.PI/2 * v.getData('side'))) * 130;
+                            vy = Math.sin(pushAng + (Math.PI/2 * v.getData('side'))) * 130;
                         }
                     });
-
-                    // Esquiva de balas lateral
-                    balas.getChildren().forEach(b => {
-                        if(Phaser.Math.Distance.Between(v.x, v.y, b.x, b.y) < 80) {
-                            let escapeAng = Phaser.Math.Angle.Between(b.x, b.y, v.x, v.y);
-                            vx += Math.cos(escapeAng + Math.PI/2) * 120;
-                            vy += Math.sin(escapeAng + Math.PI/2) * 120;
-                        }
-                    });
-
                     v.body.setVelocity(vx, vy);
                 }
-                
                 let vis = v.getData('visual');
                 if(vis) { 
                     vis.x = v.x; vis.y = v.y;
-                    vis.rotation = v.body.angle + Math.PI/2; // Rotan hacia donde se mueven
-                    v.getData('hpBar').setPosition(v.x, v.y - 20);
+                    vis.rotation = v.body.angle + Math.PI/2;
+                    v.getData('hpBar').setPosition(v.x, v.y - 15);
                 }
             });
         }
