@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>GLITCH ARENA - Prototipo</title>
+    <title>GLITCH ARENA - Alpha</title>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-arcade-physics.min.js"></script>
     <style>
         body { margin: 0; background-color: #050505; color: #00ff41; font-family: monospace; overflow: hidden; display: flex; flex-direction: column; align-items: center; }
@@ -11,7 +11,7 @@
 </head>
 <body>
     <h1>[ GLITCH ARENA ]</h1>
-    <p>FLECHAS: Moverse | CLIC: Disparar (Destruye los bloques)</p>
+    <p>WASD o FLECHAS: Moverse | CLIC: Disparar</p>
     <script>
         const config = {
             type: Phaser.AUTO,
@@ -23,74 +23,69 @@
         };
 
         const game = new Phaser.Game(config);
-        let player, cursors, balas, bloques;
+        let player, cursors, wasd, balas, bloques;
 
         function preload() {}
 
         function create() {
-            // Personaje: BIT (Verde Neón)
+            // Personaje: BIT
             player = this.add.rectangle(100, 225, 30, 30, 0x00ff41);
             this.physics.add.existing(player);
             player.body.setCollideWorldBounds(true);
 
-            // Grupo de balas
+            // Grupos
             balas = this.physics.add.group();
-
-            // Grupo de BLOQUES DE DATOS (Destruibles)
             bloques = this.physics.add.staticGroup();
+
+            // Generar Bloques de Datos
             for (let i = 0; i < 12; i++) {
                 let x = Phaser.Math.Between(300, 750);
                 let y = Phaser.Math.Between(50, 400);
-                
-                // Creamos el bloque visualmente
-                let visualBloque = this.add.rectangle(x, y, 40, 40, 0x333333);
-                visualBloque.setStrokeStyle(2, 0x00ff41); // Borde verde para que parezca código
-                
+                let visualBloque = this.add.rectangle(x, y, 40, 40, 0x1a1a1a);
+                visualBloque.setStrokeStyle(2, 0x00ff41);
                 let b = bloques.create(x, y, null);
                 b.setSize(40, 40).refreshBody();
-                b.setData('visual', visualBloque); // Guardamos la referencia visual para borrarla luego
+                b.setData('visual', visualBloque);
             }
 
-            // COLISIONES
+            // Colisiones
             this.physics.add.collider(player, bloques);
-            
-            // Lógica de DESTRUCCIÓN: Bala choca con Bloque
             this.physics.add.collider(balas, bloques, (bala, bloque) => {
-                let visual = bloque.getData('visual');
-                if (visual) visual.destroy(); // Borra el cuadrado gris
-                bloque.destroy();             // Borra la física del bloque
-                bala.destroy();               // Borra la bala
+                bloque.getData('visual').destroy();
+                bloque.destroy();
+                bala.getData('rect').destroy();
+                bala.destroy();
             });
 
-            // DISPARO (Sin rastro de píxeles)
+            // Controles: Flechas y WASD
+            cursors = this.input.keyboard.createCursorKeys();
+            wasd = this.input.keyboard.addKeys('W,A,S,D');
+
+            // Disparo
             this.input.on('pointerdown', (pointer) => {
                 let balaRect = this.add.rectangle(player.x, player.y, 10, 10, 0x00e5ff);
                 let bala = balas.create(player.x, player.y, null);
-                
-                // Hacemos que el rectángulo visual siga a la bala física
                 bala.setData('rect', balaRect);
                 bala.setSize(10, 10);
                 this.physics.moveToObject(bala, pointer, 500);
             });
-
-            cursors = this.input.keyboard.createCursorKeys();
         }
 
         function update() {
             player.body.setVelocity(0);
-            if (cursors.left.isDown) player.body.setVelocityX(-250);
-            else if (cursors.right.isDown) player.body.setVelocityX(250);
-            if (cursors.up.isDown) player.body.setVelocityY(-250);
-            else if (cursors.down.isDown) player.body.setVelocityY(250);
+            let speed = 250;
 
-            // Actualizar posición de los rectángulos de las balas
+            // Lógica combinada WASD + Flechas
+            if (cursors.left.isDown || wasd.A.isDown) player.body.setVelocityX(-speed);
+            else if (cursors.right.isDown || wasd.D.isDown) player.body.setVelocityX(speed);
+
+            if (cursors.up.isDown || wasd.W.isDown) player.body.setVelocityY(-speed);
+            else if (cursors.down.isDown || wasd.S.isDown) player.body.setVelocityY(speed);
+
+            // Actualizar balas
             balas.getChildren().forEach(bala => {
                 let rect = bala.getData('rect');
-                if (rect) {
-                    rect.x = bala.x;
-                    rect.y = bala.y;
-                }
-                // Borrar balas que se salen del mapa para no ralentizar el juego
+                if (rect) { rect.x = bala.x; rect.y = bala.y; }
                 if (bala.x < 0 || bala.x > 800 || bala.y < 0 || bala.y > 450) {
                     rect.destroy();
                     bala.destroy();
