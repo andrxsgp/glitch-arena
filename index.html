@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>CORE ARENA - Bug Fix Edition</title>
+    <title>CORE ARENA - Swarm Intelligence</title>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-arcade-physics.min.js"></script>
     <style>
         body { margin: 0; background-color: #050505; color: #00ff41; font-family: 'Courier New', monospace; overflow: hidden; display: flex; flex-direction: column; align-items: center; }
@@ -49,7 +49,7 @@
             bloques = this.physics.add.staticGroup();
             viruses = this.physics.add.group();
 
-            // Mapa Radial mejorado (menos denso en el centro para evitar trabas)
+            // Mapa Radial
             const wallSize = 30;
             for (let r = 200; r < 750; r += 160) {
                 let steps = Math.floor(r / 35);
@@ -74,6 +74,8 @@
 
             this.physics.add.collider(player, bloques);
             this.physics.add.collider(viruses, bloques);
+            // Colisión entre virus para que no se encimen
+            this.physics.add.collider(viruses, viruses);
             this.physics.add.collider(balas, bloques, (b) => { if(b.getData('r')) b.getData('r').destroy(); b.destroy(); });
 
             this.physics.add.overlap(balas, viruses, (bala, virus) => {
@@ -86,17 +88,16 @@
                 bala.destroy();
             });
 
-            // FIX: Colisión inmediata para evitar "fusión"
             this.physics.add.overlap(player, viruses, (p, v) => {
                 if (!isInvulnerable) {
                     playerHP -= 20;
                     lastActionTime = this.time.now;
                     isInvulnerable = true;
                     player.setAlpha(0.5);
-                    this.time.delayedCall(1000, () => { isInvulnerable = false; player.setAlpha(1); });
+                    this.time.delayedCall(1000, () => { if(player.active) { isInvulnerable = false; player.setAlpha(1); }});
                     if (playerHP <= 0) location.reload();
                 }
-                destroyVirus(v); // Se destruye siempre al tocar, evitando el bug visual
+                destroyVirus(v);
                 checkWave(this);
             });
 
@@ -118,7 +119,6 @@
 
             spawnWave(this);
 
-            // Regeneración 15 HP/s
             this.time.addEvent({ 
                 delay: 1000, 
                 callback: () => {
@@ -128,11 +128,16 @@
         }
 
         function spawnWave(scene) {
-            for(let i=0; i<3; i++) { // Aseguramos 3 virus
+            for(let i=0; i<3; i++) {
                 let x = 800, y = 600;
                 let vVis = scene.add.triangle(0, 0, 0, 20, 10, 0, 20, 20, 0xff003c).setDepth(5);
                 let vHpBar = scene.add.rectangle(0, 0, 20, 3, 0xff0000).setDepth(6).setVisible(false);
                 let v = viruses.create(x, y, null).setSize(20, 20).setVisible(false);
+                
+                // Impulso inicial aleatorio para separarlos al nacer
+                let angle = Math.random() * Math.PI * 2;
+                v.setVelocity(Math.cos(angle) * 100, Math.sin(angle) * 100);
+                
                 v.setData('visual', vVis).setData('hpBar', vHpBar).setData('hp', 60).setData('side', Phaser.Math.RND.pick([-1, 1]));
             }
         }
@@ -201,16 +206,26 @@
                     let vx = Math.cos(angleToPlayer) * 110;
                     let vy = Math.sin(angleToPlayer) * 110;
 
-                    // FIX IA: Rodear muros con detección anticipada
-                    let isBlocked = false;
+                    // Separación entre ellos (Evita que se encimen)
+                    viruses.getChildren().forEach(other => {
+                        if (v !== other) {
+                            let d = Phaser.Math.Distance.Between(v.x, v.y, other.x, other.y);
+                            if (d < 30) {
+                                let push = Phaser.Math.Angle.Between(other.x, other.y, v.x, v.y);
+                                vx += Math.cos(push) * 50;
+                                vy += Math.sin(push) * 50;
+                            }
+                        }
+                    });
+
+                    // Rodear muros
                     bloques.getChildren().forEach(block => {
                         let d = Phaser.Math.Distance.Between(v.x, v.y, block.x, block.y);
                         if(d < 50) {
-                            isBlocked = true;
                             let pushAng = Phaser.Math.Angle.Between(block.x, block.y, v.x, v.y);
                             let side = v.getData('side');
-                            vx = Math.cos(pushAng + (Math.PI/2.2 * side)) * 140;
-                            vy = Math.sin(pushAng + (Math.PI/2.2 * side)) * 140;
+                            vx = Math.cos(pushAng + (Math.PI/2 * side)) * 140;
+                            vy = Math.sin(pushAng + (Math.PI/2 * side)) * 140;
                         }
                     });
 
