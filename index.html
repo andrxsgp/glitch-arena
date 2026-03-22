@@ -2,27 +2,19 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>GLITCH ARENA - Súper Fix</title>
+    <title>GLITCH ARENA - Restaurado</title>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-arcade-physics.min.js"></script>
     <style>
-        body { margin: 0; background-color: #050505; color: #00ff41; font-family: monospace; overflow: hidden; display: flex; flex-direction: column; align-items: center; }
-        canvas { border: 2px solid #ff003c; box-shadow: 0 0 20px #ff003c; margin-top: 20px; }
-        .ui-text { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); pointer-events: none; text-align: center; z-index: 100; }
-        #superStatus { color: #00e5ff; font-weight: bold; display: none; text-shadow: 0 0 10px #00e5ff; }
-        .game-over-screen { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); color: #ff003c; font-size: 3rem; text-align: center; justify-content: center; align-items: center; flex-direction: column; z-index: 1000; }
-        button { background: #ff003c; color: white; padding: 10px 20px; border: none; cursor: pointer; font-family: monospace; margin-top: 20px; }
+        body { margin: 0; background-color: #050505; color: #00ff41; font-family: 'Courier New', monospace; overflow: hidden; display: flex; flex-direction: column; align-items: center; }
+        canvas { border: 2px solid #ff003c; box-shadow: 0 0 20px #ff003c; margin-top: 10px; }
+        .ui-container { text-align: center; pointer-events: none; margin-top: 10px; }
+        #superReady { color: #00e5ff; font-weight: bold; visibility: hidden; text-shadow: 0 0 8px #00e5ff; }
     </style>
 </head>
 <body>
-    <div class="ui-text">
-        <h1>[ GLITCH ARENA ]</h1>
-        <p>Carga el SÚPER: <span id="virusCountText">0</span>/5</p>
-        <div id="superStatus">¡SÚPER LISTO! (ESPACIO)</div>
-    </div>
-
-    <div id="gameOverScreen" class="game-over-screen">
-        <p>SISTEMA CAÍDO</p>
-        <button onclick="window.location.reload()">REINICIAR</button>
+    <div class="ui-container">
+        <h1 style="margin:0;">[ GLITCH ARENA ]</h1>
+        <p style="margin:5px;">Súper: <span id="sCount">0</span>/5 | <span id="superReady">¡PRESIONA ESPACIO!</span></p>
     </div>
 
     <script>
@@ -36,59 +28,158 @@
         };
 
         const game = new Phaser.Game(config);
-        let player, wasd, spaceKey, cursors, balas, bloques, viruses, pulseRing;
+        let player, spaceKey, wasd, balas, bloques, viruses, pulseRing;
+        let playerHP = 100, playerAmmo = 3, kills = 0, lastReload = 0;
+        let isGameOver = false, superReady = false;
         let healthBar, ammoBars = [];
-        let playerHP = 100, playerAmmo = 3, lastReload = 0, killsForSuper = 0, gameOver = false, superReady = false;
 
         function preload() {}
 
         function create() {
+            // Mundo y Cámara
             this.physics.world.setBounds(0, 0, 1600, 1200);
             this.cameras.main.setBounds(0, 0, 1600, 1200);
 
+            // Grupos
             balas = this.physics.add.group();
             bloques = this.physics.add.staticGroup();
             viruses = this.physics.add.group();
 
-            // Laberinto mejorado
-            const tileSize = 80;
-            const wallSize = 60; 
-            for (let x = 0; x < 1600; x += tileSize) {
-                for (let y = 0; y < 1200; y += tileSize) {
-                    if (x < 240 && y < 240) continue;
-                    if (Phaser.Math.Between(0, 10) > 7) { 
-                        let visual = this.add.rectangle(x + 40, y + 40, wallSize, wallSize, 0x1a1a1a).setStrokeStyle(2, 0x00ff41).setDepth(1);
-                        let b = bloques.create(x + 40, y + 40, null);
-                        b.body.setSize(wallSize, wallSize);
-                        b.refreshBody();
+            // Muros (Laberinto)
+            for (let x = 0; x < 1600; x += 80) {
+                for (let y = 0; y < 1200; y += 80) {
+                    if (x < 200 && y < 200) continue;
+                    if (Phaser.Math.Between(0, 10) > 7) {
+                        let visual = this.add.rectangle(x+40, y+40, 60, 60, 0x1a1a1a).setStrokeStyle(2, 0x00ff41).setDepth(1);
+                        let b = bloques.create(x+40, y+40, null).setSize(60, 60).refreshBody();
                         b.setData('visual', visual);
                     }
                 }
             }
 
             // Jugador
-            player = this.add.rectangle(120, 120, 30, 30, 0x00ff41).setDepth(10);
+            player = this.add.rectangle(100, 100, 30, 30, 0x00ff41).setDepth(10);
             this.physics.add.existing(player);
             player.body.setCollideWorldBounds(true);
             this.cameras.main.startFollow(player, true, 0.1, 0.1);
 
             // UI
             healthBar = this.add.rectangle(0, 0, 40, 5, 0x00ff00).setDepth(11);
-            for(let i=0; i<3; i++) { ammoBars[i] = this.add.rectangle(0, 0, 10, 3, 0x00e5ff).setDepth(11); }
+            for(let i=0; i<3; i++) ammoBars[i] = this.add.rectangle(0, 0, 10, 3, 0x00e5ff).setDepth(11);
 
-            // Anillo del Súper
-            pulseRing = this.add.circle(0, 0, 10, 0x00e5ff, 0.4).setDepth(5).setVisible(false);
+            // Efecto Súper
+            pulseRing = this.add.circle(0, 0, 10, 0x00e5ff, 0.4).setVisible(false).setDepth(5);
 
-            this.time.addEvent({ delay: 2000, callback: spawnVirus, callbackScope: this, loop: true });
-            
+            // Colisiones
             this.physics.add.collider(player, bloques);
             this.physics.add.collider(viruses, bloques);
-            this.physics.add.collider(balas, bloques, (b) => { if(b.getData('rect')) b.getData('rect').destroy(); b.destroy(); });
+            this.physics.add.collider(balas, bloques, (b) => { 
+                if(b.getData('r')) b.getData('r').destroy(); 
+                b.destroy(); 
+            });
 
             this.physics.add.collider(balas, viruses, (bala, virus) => {
-                if(virus.getData('visual')) virus.getData('visual').destroy();
-                virus.destroy();
-                if(bala.getData('rect')) bala.getData('rect').destroy();
+                destroyVirus(virus);
+                if(bala.getData('r')) bala.getData('r').destroy();
                 bala.destroy();
+                updateKills();
+            });
+
+            this.physics.add.overlap(player, viruses, (p, v) => {
+                playerHP -= 20;
+                destroyVirus(v);
+                if(playerHP <= 0) location.reload(); // Reinicio rápido
+            });
+
+            // Controles
+            wasd = this.input.keyboard.addKeys('W,A,S,D');
+            spaceKey = this.input.keyboard.addKey('SPACE');
+
+            // Disparo
+            this.input.on('pointerdown', (pointer) => {
+                if(playerAmmo > 0) {
+                    playerAmmo--;
+                    let p = pointer.positionToCamera(this.cameras.main);
+                    let r = this.add.rectangle(player.x, player.y, 8, 8, 0x00e5ff).setDepth(5);
+                    let b = balas.create(player.x, player.y, null).setSize(8, 8);
+                    b.setData('r', r);
+                    this.physics.moveTo(b, p.x, p.y, 600);
+                }
+            });
+
+            // Spawn Virus
+            this.time.addEvent({ delay: 2000, callback: () => {
+                let x = Phaser.Math.Between(400, 1500), y = Phaser.Math.Between(400, 1100);
+                let vVis = this.add.rectangle(x, y, 25, 25, 0xff003c).setDepth(5);
+                let v = viruses.create(x, y, null).setSize(25, 25);
+                v.setData('visual', vVis);
+            }, loop: true });
+        }
+
+        function destroyVirus(v) {
+            if(v.getData('visual')) v.getData('visual').destroy();
+            v.destroy();
+        }
+
+        function updateKills() {
+            if(!superReady) {
+                kills++;
+                document.getElementById('sCount').innerText = kills;
+                if(kills >= 5) {
+                    superReady = true;
+                    document.getElementById('superReady').style.visibility = 'visible';
+                }
+            }
+        }
+
+        function update(time) {
+            player.body.setVelocity(0);
+            let s = 280;
+            if (wasd.A.isDown) player.body.setVelocityX(-s);
+            else if (wasd.D.isDown) player.body.setVelocityX(s);
+            if (wasd.W.isDown) player.body.setVelocityY(-s);
+            else if (wasd.S.isDown) player.body.setVelocityY(s);
+
+            // Activar Súper
+            if (Phaser.Input.Keyboard.JustDown(spaceKey) && superReady) {
+                superReady = false; kills = 0;
+                document.getElementById('sCount').innerText = "0";
+                document.getElementById('superReady').style.visibility = 'hidden';
                 
-                if(!superReady) {
+                pulseRing.setPosition(player.x, player.y).setVisible(true).setRadius(10).setAlpha(0.6);
+                this.tweens.add({
+                    targets: pulseRing, radius: 250, alpha: 0, duration: 400,
+                    onComplete: () => pulseRing.setVisible(false)
+                });
+
+                viruses.getChildren().forEach(v => {
+                    if(Phaser.Math.Distance.Between(player.x, player.y, v.x, v.y) < 250) {
+                        let ang = Phaser.Math.Angle.Between(player.x, player.y, v.x, v.y);
+                        v.body.setVelocity(Math.cos(ang)*1200, Math.sin(ang)*1200);
+                        v.setData('st', true);
+                        this.time.delayedCall(800, () => { if(v.active) v.setData('st', false); });
+                    }
+                });
+            }
+
+            // Recarga y UI
+            if (playerAmmo < 3 && time > lastReload + 1200) { playerAmmo++; lastReload = time; }
+            healthBar.x = player.x; healthBar.y = player.y - 35;
+            healthBar.width = Math.max(0, (playerHP/100)*40);
+            for(let i=0; i<3; i++) {
+                ammoBars[i].setPosition(player.x - 14 + (i*14), player.y - 25);
+                ammoBars[i].visible = (i < playerAmmo);
+            }
+
+            // Actualizar visuales
+            balas.getChildren().forEach(b => { 
+                if(b.getData('r')) { b.getData('r').x = b.x; b.getData('r').y = b.y; } 
+            });
+            viruses.getChildren().forEach(v => {
+                if(!v.getData('st')) this.physics.moveToObject(v, player, 130);
+                if(v.getData('visual')) { v.getData('visual').x = v.x; v.getData('visual').y = v.y; }
+            });
+        }
+    </script>
+</body>
+</html>
