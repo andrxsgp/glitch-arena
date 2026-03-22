@@ -11,7 +11,7 @@
 </head>
 <body>
     <h1>[ GLITCH ARENA ]</h1>
-    <p>WASD o FLECHAS: Moverse | CLIC: Disparar</p>
+    <p>WASD: Mover | CLIC: Disparar (Munición: 3)</p>
     <script>
         const config = {
             type: Phaser.AUTO,
@@ -23,7 +23,11 @@
         };
 
         const game = new Phaser.Game(config);
-        let player, cursors, wasd, balas, bloques;
+        let player, wasd, cursors, balas, bloques;
+        let healthBar, ammoBars = [];
+        let playerHP = 100;
+        let playerAmmo = 3;
+        let lastReload = 0;
 
         function preload() {}
 
@@ -33,19 +37,25 @@
             this.physics.add.existing(player);
             player.body.setCollideWorldBounds(true);
 
+            // UI: Barra de Vida
+            healthBar = this.add.rectangle(0, 0, 40, 5, 0x00ff00);
+            
+            // UI: Barras de Munición (3 pequeñas líneas)
+            for(let i=0; i<3; i++) {
+                ammoBars[i] = this.add.rectangle(0, 0, 10, 3, 0x00e5ff);
+            }
+
             // Grupos
             balas = this.physics.add.group();
             bloques = this.physics.add.staticGroup();
 
-            // Generar Bloques de Datos
+            // Generar Bloques
             for (let i = 0; i < 12; i++) {
                 let x = Phaser.Math.Between(300, 750);
                 let y = Phaser.Math.Between(50, 400);
-                let visualBloque = this.add.rectangle(x, y, 40, 40, 0x1a1a1a);
-                visualBloque.setStrokeStyle(2, 0x00ff41);
-                let b = bloques.create(x, y, null);
-                b.setSize(40, 40).refreshBody();
-                b.setData('visual', visualBloque);
+                let visual = this.add.rectangle(x, y, 40, 40, 0x1a1a1a).setStrokeStyle(2, 0x00ff41);
+                let b = bloques.create(x, y, null).setSize(40, 40).refreshBody();
+                b.setData('visual', visual);
             }
 
             // Colisiones
@@ -57,32 +67,54 @@
                 bala.destroy();
             });
 
-            // Controles: Flechas y WASD
+            // Controles
             cursors = this.input.keyboard.createCursorKeys();
             wasd = this.input.keyboard.addKeys('W,A,S,D');
 
-            // Disparo
+            // Disparo con Munición
             this.input.on('pointerdown', (pointer) => {
-                let balaRect = this.add.rectangle(player.x, player.y, 10, 10, 0x00e5ff);
-                let bala = balas.create(player.x, player.y, null);
-                bala.setData('rect', balaRect);
-                bala.setSize(10, 10);
-                this.physics.moveToObject(bala, pointer, 500);
+                if (playerAmmo > 0) {
+                    playerAmmo--;
+                    let balaRect = this.add.rectangle(player.x, player.y, 10, 10, 0x00e5ff);
+                    let bala = balas.create(player.x, player.y, null).setSize(10, 10);
+                    bala.setData('rect', balaRect);
+                    this.physics.moveToObject(bala, pointer, 500);
+                } else {
+                    // Efecto de "Sin Munición"
+                    player.setFillStyle(0xff0000);
+                    this.time.delayedCall(100, () => player.setFillStyle(0x00ff41));
+                }
             });
         }
 
-        function update() {
+        function update(time) {
             player.body.setVelocity(0);
             let speed = 250;
 
-            // Lógica combinada WASD + Flechas
+            // Movimiento
             if (cursors.left.isDown || wasd.A.isDown) player.body.setVelocityX(-speed);
             else if (cursors.right.isDown || wasd.D.isDown) player.body.setVelocityX(speed);
-
             if (cursors.up.isDown || wasd.W.isDown) player.body.setVelocityY(-speed);
             else if (cursors.down.isDown || wasd.S.isDown) player.body.setVelocityY(speed);
 
-            // Actualizar balas
+            // Recarga de munición (Cada 1.5 segundos)
+            if (playerAmmo < 3 && time > lastReload + 1500) {
+                playerAmmo++;
+                lastReload = time;
+            }
+
+            // Actualizar Barras sobre el jugador
+            healthBar.x = player.x;
+            healthBar.y = player.y - 30;
+            healthBar.width = (playerHP / 100) * 40;
+
+            for(let i=0; i<3; i++) {
+                ammoBars[i].x = (player.x - 14) + (i * 14);
+                ammoBars[i].y = player.y - 22;
+                ammoBars[i].visible = (i < playerAmmo);
+            }
+
+            // Actualizar visual de balas
             balas.getChildren().forEach(bala => {
                 let rect = bala.getData('rect');
                 if (rect) { rect.x = bala.x; rect.y = bala.y; }
