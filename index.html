@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>CORE LABYRINTH - Full Combat</title>
+    <title>CORE ARENA - Solid Walls</title>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-arcade-physics.min.js"></script>
     <style>
         body { margin: 0; background-color: #050505; color: #00ff41; font-family: 'Courier New', monospace; overflow: hidden; display: flex; flex-direction: column; align-items: center; }
@@ -45,7 +45,6 @@
             this.physics.world.setBounds(0, 0, 1600, 1200);
             this.cameras.main.setBounds(0, 0, 1600, 1200).setZoom(0.7);
 
-            // Dibujar Arcos
             const gfx = this.add.graphics();
             gfx.lineStyle(6, 0x00ff41, 1);
             rings.forEach(ring => {
@@ -59,31 +58,26 @@
             balas = this.physics.add.group();
             viruses = this.physics.add.group();
 
-            // Bit
             player = this.add.rectangle(CX - 250, CY - 250, 24, 24, 0x00ff41).setDepth(10);
             this.physics.add.existing(player);
             player.body.setCircle(12);
             this.cameras.main.startFollow(player, true, 0.1, 0.1);
 
-            // UI
             healthBar = this.add.rectangle(0, 0, 40, 5, 0x00ff00).setDepth(11);
             for(let i=0; i<3; i++) ammoBars[i] = this.add.rectangle(0, 0, 10, 4, 0x00e5ff).setDepth(11);
             pulseRing = this.add.circle(0, 0, 10, 0x00e5ff, 0.3).setVisible(false).setDepth(1);
 
-            // Colisión Proyectil vs Virus
             this.physics.add.overlap(balas, viruses, (b, v) => {
                 v.setData('hp', v.getData('hp') - 20);
                 v.setFillStyle(0xffffff);
                 this.time.delayedCall(50, () => v.active && v.setFillStyle(0xff003c));
                 if(v.getData('hp') <= 0) { 
-                    v.destroy(); 
-                    updateKills(); 
+                    v.destroy(); updateKills(); 
                     if(viruses.countActive() === 0) spawnWave(this); 
                 }
                 b.destroy();
             });
 
-            // Colisión Bit vs Virus
             this.physics.add.overlap(player, viruses, (p, v) => {
                 if(!isInvulnerable) {
                     playerHP -= 20;
@@ -106,12 +100,28 @@
                     let p = pointer.positionToCamera(this.cameras.main);
                     let b = this.add.circle(player.x, player.y, 5, 0x00e5ff);
                     balas.add(b);
-                    this.physics.moveTo(b, p.x, p.y, 600);
-                    this.time.delayedCall(1000, () => b.destroy());
+                    this.physics.moveTo(b, p.x, p.y, 700);
                 }
             });
 
             spawnWave(this);
+        }
+
+        // --- Nueva función para que las balas no atraviesen muros ---
+        function checkProjectileCollision(bullet) {
+            const dist = Phaser.Math.Distance.Between(bullet.x, bullet.y, CX, CY);
+            const angle = Phaser.Math.Angle.WrapDegrees(Phaser.Math.RadToDeg(Phaser.Math.Angle.Between(CX, CY, bullet.x, bullet.y)));
+            
+            rings.forEach(ring => {
+                if (Math.abs(dist - ring.r) < 8) { // Si la bala toca el radio
+                    let diff = Math.abs(angle - ring.gap);
+                    if (diff > 180) diff = 360 - diff;
+                    
+                    if (diff > 25) { // Si no es la puerta, la bala choca
+                        bullet.destroy();
+                    }
+                }
+            });
         }
 
         function handleArcPhysics(obj, isVirus = false) {
@@ -123,7 +133,7 @@
                     let diff = Math.abs(angle - ring.gap);
                     if (diff > 180) diff = 360 - diff;
                     
-                    if (diff > 28) { // Bloqueo si no es la puerta
+                    if (diff > 28) {
                         const pushOut = (dist > ring.r) ? 1 : -1;
                         const angRad = Phaser.Math.DegToRad(angle);
                         obj.x = CX + Math.cos(angRad) * (ring.r + (15 * pushOut));
@@ -161,7 +171,6 @@
             if (wasd.W.isDown || cursors.up.isDown) player.body.setVelocityY(-320);
             else if (wasd.S.isDown || cursors.down.isDown) player.body.setVelocityY(320);
 
-            // Habilidad Súper
             if (Phaser.Input.Keyboard.JustDown(spaceKey) && superReady) {
                 superReady = false; kills = 0;
                 document.getElementById('sCount').innerText = "0";
@@ -171,39 +180,12 @@
                 viruses.getChildren().forEach(v => {
                     if(Phaser.Math.Distance.Between(player.x, player.y, v.x, v.y) < 250) v.destroy();
                 });
+                if(viruses.countActive() === 0) spawnWave(this);
             }
 
-            // Recarga y UI
             if (playerAmmo < 3 && time > lastReload + 1200) { playerAmmo++; lastReload = time; }
             if (time - lastActionTime > 4000 && playerHP < 100) playerHP = Math.min(100, playerHP + 0.5);
             
             healthBar.setPosition(player.x, player.y - 30).width = (playerHP/100)*40;
             for(let i=0; i<3; i++) {
-                ammoBars[i].setPosition(player.x - 15 + (i*15), player.y - 22);
-                ammoBars[i].visible = (i < playerAmmo);
-            }
-
-            handleArcPhysics(player);
-
-            viruses.getChildren().forEach(v => {
-                handleArcPhysics(v, true);
-                
-                let angleToPlayer = Phaser.Math.Angle.Between(v.x, v.y, player.x, player.y);
-                
-                // Si el virus está bloqueado por un muro, busca la puerta
-                if(v.getData('blocked')) {
-                    const distV = Phaser.Math.Distance.Between(v.x, v.y, CX, CY);
-                    const currentRing = rings.find(r => Math.abs(distV - r.r) < 40);
-                    if(currentRing) {
-                        let angleToGap = Phaser.Math.DegToRad(currentRing.gap);
-                        angleToPlayer = angleToGap; // Se desvía hacia la puerta
-                    }
-                }
-                
-                v.body.setVelocity(Math.cos(angleToPlayer)*150, Math.sin(angleToPlayer)*150);
-                v.rotation = angleToPlayer + Math.PI/2;
-            });
-        }
-    </script>
-</body>
-</html>
+                ammoBars[i].setPosition(player.x - 15
