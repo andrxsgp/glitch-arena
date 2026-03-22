@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>GLITCH ARENA - IA Avanzada</title>
+    <title>GLITCH ARENA - IA & Regen Fix</title>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-arcade-physics.min.js"></script>
     <style>
         body { margin: 0; background-color: #050505; color: #00ff41; font-family: 'Courier New', monospace; overflow: hidden; display: flex; flex-direction: column; align-items: center; }
@@ -82,12 +82,11 @@
 
             this.physics.add.overlap(player, viruses, (p, v) => {
                 playerHP -= 20;
-                lastActionTime = this.time.now; // Reset curación al recibir daño
+                lastActionTime = this.time.now;
                 destroyVirus(v);
                 if(playerHP <= 0) location.reload();
             });
 
-            // Controles combinados
             wasd = this.input.keyboard.addKeys('W,A,S,D');
             cursors = this.input.keyboard.createCursorKeys();
             spaceKey = this.input.keyboard.addKey('SPACE');
@@ -95,7 +94,7 @@
             this.input.on('pointerdown', (pointer) => {
                 if(playerAmmo > 0) {
                     playerAmmo--;
-                    lastActionTime = this.time.now; // Reset curación al atacar
+                    lastActionTime = this.time.now;
                     let p = pointer.positionToCamera(this.cameras.main);
                     let r = this.add.rectangle(player.x, player.y, 8, 8, 0x00e5ff).setDepth(5);
                     let b = balas.create(player.x, player.y, null).setSize(8, 8).setVisible(false);
@@ -106,12 +105,12 @@
 
             this.time.addEvent({ delay: 2000, callback: spawnVirus, callbackScope: this, loop: true });
             
-            // Evento de regeneración de vida cada segundo
+            // --- REGENERACIÓN: 15 HP por segundo ---
             this.time.addEvent({ 
                 delay: 1000, 
                 callback: () => {
                     if (this.time.now - lastActionTime > 4000 && playerHP < 100) {
-                        playerHP = Math.min(100, playerHP + 5);
+                        playerHP = Math.min(100, playerHP + 15);
                     }
                 }, 
                 loop: true 
@@ -143,7 +142,6 @@
         function update(time) {
             player.body.setVelocity(0);
             let s = 300;
-            // Soporte para ambos sistemas de movimiento
             if (wasd.A.isDown || cursors.left.isDown) player.body.setVelocityX(-s);
             else if (wasd.D.isDown || cursors.right.isDown) player.body.setVelocityX(s);
             if (wasd.W.isDown || cursors.up.isDown) player.body.setVelocityY(-s);
@@ -167,7 +165,7 @@
 
             if (playerAmmo < 3 && time > lastReload + 1200) { playerAmmo++; lastReload = time; }
             healthBar.setPosition(player.x, player.y - 35).width = (playerHP/100)*40;
-            healthBar.setFillStyle(playerHP > 30 ? 0x00ff00 : 0xff0000); // Cambia a rojo si hay poca vida
+            healthBar.setFillStyle(playerHP > 30 ? 0x00ff00 : 0xff0000);
 
             for(let i=0; i<3; i++) {
                 ammoBars[i].setPosition(player.x - 14 + (i*14), player.y - 25);
@@ -183,32 +181,31 @@
 
             viruses.getChildren().forEach(v => {
                 if(!v.getData('st')) {
-                    // IA con Evasión
                     let angleToPlayer = Phaser.Math.Angle.Between(v.x, v.y, player.x, player.y);
-                    let vx = Math.cos(angleToPlayer) * 80;
-                    let vy = Math.sin(angleToPlayer) * 80;
+                    let targetVx = Math.cos(angleToPlayer) * 80;
+                    let targetVy = Math.sin(angleToPlayer) * 80;
 
-                    // 1. Evitar Muros (Raycasting simple)
+                    // IA MEJORADA: Esquiva de muros con deslizamiento
                     bloques.getChildren().forEach(block => {
                         let dist = Phaser.Math.Distance.Between(v.x, v.y, block.x, block.y);
-                        if(dist < 60) {
-                            let ang = Phaser.Math.Angle.Between(block.x, block.y, v.x, v.y);
-                            vx += Math.cos(ang) * 100; // Fuerza de repulsión del muro
-                            vy += Math.sin(ang) * 100;
+                        if(dist < 55) { // Radio de detección de muro
+                            let pushAng = Phaser.Math.Angle.Between(block.x, block.y, v.x, v.y);
+                            // Añade una fuerza lateral para rodear el objeto
+                            targetVx += Math.cos(pushAng) * 150;
+                            targetVy += Math.sin(pushAng) * 150;
                         }
                     });
 
-                    // 2. Esquivar Balas
+                    // Esquiva de balas
                     balas.getChildren().forEach(b => {
-                        let dist = Phaser.Math.Distance.Between(v.x, v.y, b.x, b.y);
-                        if(dist < 100) {
-                            let ang = Phaser.Math.Angle.Between(b.x, b.y, v.x, v.y);
-                            vx += Math.cos(ang + Math.PI/2) * 120; // Movimiento lateral evasivo
-                            vy += Math.sin(ang + Math.PI/2) * 120;
+                        if(Phaser.Math.Distance.Between(v.x, v.y, b.x, b.y) < 90) {
+                            let escapeAng = Phaser.Math.Angle.Between(b.x, b.y, v.x, v.y);
+                            targetVx += Math.cos(escapeAng + Math.PI/2) * 130;
+                            targetVy += Math.sin(escapeAng + Math.PI/2) * 130;
                         }
                     });
 
-                    v.body.setVelocity(vx, vy);
+                    v.body.setVelocity(targetVx, targetVy);
                 }
                 
                 let vis = v.getData('visual');
