@@ -2,54 +2,70 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>GLITCH ARENA - Prototipo</title>
+    <title>GLITCH ARENA - Alpha</title>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-arcade-physics.min.js"></script>
     <style>
         body { margin: 0; background-color: #050505; color: #00ff41; font-family: monospace; overflow: hidden; display: flex; flex-direction: column; align-items: center; }
         canvas { border: 2px solid #ff003c; box-shadow: 0 0 20px #ff003c; margin-top: 20px; }
-        .ui { margin-top: 10px; text-align: center; }
     </style>
 </head>
 <body>
-    <div class="ui">
-        <h1>[ GLITCH ARENA: PRUEBA DE CAMPO ]</h1>
-        <p>Usa las FLECHAS del teclado para mover al personaje "BIT"</p>
-    </div>
+    <h1>[ GLITCH ARENA ]</h1>
+    <p>FLECHAS para mover | CLIC para disparar</p>
     <script>
         const config = {
             type: Phaser.AUTO,
             width: 800,
             height: 450,
             backgroundColor: '#0a0a0a',
-            physics: { default: 'arcade', arcade: { gravity: { y: 0 } } },
+            physics: { default: 'arcade', arcade: { debug: false } },
             scene: { preload: preload, create: create, update: update }
         };
 
         const game = new Phaser.Game(config);
-        let player;
-        let cursors;
+        let player, cursors, balas, muros;
 
-        function preload() {
-            // Aquí cargaríamos imágenes. Por ahora usaremos un cuadrado generado.
-        }
+        function preload() {}
 
         function create() {
-            // Creamos a "BIT" (un cuadrado verde neón)
-            player = this.add.rectangle(400, 225, 40, 40, 0x00ff41);
+            // Personaje: BIT
+            player = this.add.rectangle(100, 100, 30, 30, 0x00ff41);
             this.physics.add.existing(player);
             player.body.setCollideWorldBounds(true);
+
+            // Grupo de balas
+            balas = this.physics.add.group();
+
+            // Generar MUROS DE ERROR aleatorios
+            muros = this.physics.add.staticGroup();
+            for (let i = 0; i < 8; i++) {
+                let x = Phaser.Math.Between(200, 700);
+                let y = Phaser.Math.Between(50, 400);
+                let m = muros.create(x, y, null);
+                this.add.rectangle(x, y, 40, 40, 0x555555); // Visual del muro
+                m.setSize(40, 40).refreshBody();
+            }
+
+            // Colisiones
+            this.physics.add.collider(player, muros);
+            this.physics.add.collider(balas, muros, (b) => b.destroy());
+
+            // Disparo al hacer clic
+            this.input.on('pointerdown', (pointer) => {
+                let bala = balas.create(player.x, player.y, null);
+                this.add.rectangle(player.x, player.y, 10, 10, 0x00e5ff); 
+                this.physics.moveToObject(bala, pointer, 500);
+            });
 
             cursors = this.input.keyboard.createCursorKeys();
         }
 
         function update() {
             player.body.setVelocity(0);
-
-            if (cursors.left.isDown) player.body.setVelocityX(-200);
-            else if (cursors.right.isDown) player.body.setVelocityX(200);
-
-            if (cursors.up.isDown) player.body.setVelocityY(-200);
-            else if (cursors.down.isDown) player.body.setVelocityY(200);
+            if (cursors.left.isDown) player.body.setVelocityX(-250);
+            else if (cursors.right.isDown) player.body.setVelocityX(250);
+            if (cursors.up.isDown) player.body.setVelocityY(-250);
+            else if (cursors.down.isDown) player.body.setVelocityY(250);
         }
     </script>
 </body>
