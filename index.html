@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>GLITCH ARENA - Alpha 0.3</title>
+    <title>GLITCH ARENA - Laberinto Alpha</title>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-arcade-physics.min.js"></script>
     <style>
         body { margin: 0; background-color: #050505; color: #00ff41; font-family: monospace; overflow: hidden; display: flex; flex-direction: column; align-items: center; }
@@ -13,11 +13,11 @@
 </head>
 <body>
     <h1>[ GLITCH ARENA ]</h1>
-    <p>Virus eliminados: <span id="virusEliminados">0</span></p>
+    <p>Usa los pasillos para sobrevivir | Virus: <span id="virusEliminados">0</span></p>
 
     <div id="gameOverScreen" class="game-over-screen">
-        <p>SISTEMA CRÍTICO: OFFLINE</p>
-        <button onclick="window.location.reload()">REINICIAR NÚCLEO</button>
+        <p>CONEXIÓN PERDIDA</p>
+        <button onclick="window.location.reload()">REINTENTAR</button>
     </div>
 
     <script>
@@ -38,16 +38,17 @@
         function preload() {}
 
         function create() {
-            this.physics.world.setBounds(0, 0, 1600, 900);
-            this.cameras.main.setBounds(0, 0, 1600, 900);
+            // Mundo más grande para el laberinto
+            this.physics.world.setBounds(0, 0, 1600, 1200);
+            this.cameras.main.setBounds(0, 0, 1600, 1200);
 
             // Personaje: BIT
-            player = this.add.rectangle(800, 450, 30, 30, 0x00ff41);
+            player = this.add.rectangle(100, 100, 30, 30, 0x00ff41);
             this.physics.add.existing(player);
             player.body.setCollideWorldBounds(true);
             this.cameras.main.startFollow(player, true, 0.1, 0.1);
 
-            // UI que SIGUE al jugador (Sin setScrollFactor(0))
+            // UI que sigue al jugador
             healthBar = this.add.rectangle(0, 0, 40, 5, 0x00ff00);
             for(let i=0; i<3; i++) { ammoBars[i] = this.add.rectangle(0, 0, 10, 3, 0x00e5ff); }
 
@@ -56,28 +57,32 @@
             bloques = this.physics.add.staticGroup();
             viruses = this.physics.add.group();
 
-            // Generar Bloques "Electrificados"
-            for (let i = 0; i < 40; i++) {
-                let x = Phaser.Math.Between(100, 1500);
-                let y = Phaser.Math.Between(100, 800);
-                if (Phaser.Math.Distance.Between(x, y, 800, 450) < 100) continue; // No bloques cerca del spawn
-                let visual = this.add.rectangle(x, y, 40, 40, 0x1a1a1a).setStrokeStyle(2, 0x00ff41);
-                let b = bloques.create(x, y, null).setSize(40, 40).refreshBody();
-                b.setData('visual', visual);
+            // GENERACIÓN DE MUROS ORDENADOS (Caminos)
+            const tileSize = 80;
+            for (let x = 0; x < 1600; x += tileSize) {
+                for (let y = 0; y < 1200; y += tileSize) {
+                    // No poner muros en el inicio (spawn)
+                    if (x < 200 && y < 200) continue;
+
+                    // Lógica para crear pasillos: ponemos un bloque según una probabilidad o patrón
+                    if (Phaser.Math.Between(0, 10) > 7) { 
+                        let visual = this.add.rectangle(x + 40, y + 40, 70, 70, 0x1a1a1a).setStrokeStyle(2, 0x00ff41);
+                        let b = bloques.create(x + 40, y + 40, null).setSize(70, 70).refreshBody();
+                        b.setData('visual', visual);
+                    }
+                }
             }
 
-            // Spawn de Virus cada 2 seg
-            this.time.addEvent({ delay: 2000, callback: spawnVirus, callbackScope: this, loop: true });
+            // Spawn de Virus
+            this.time.addEvent({ delay: 2500, callback: spawnVirus, callbackScope: this, loop: true });
 
-            // Colisiones
-            this.physics.add.collider(player, bloques, () => {
-                playerHP -= 0.2; // Daño constante al tocar bloques
-                player.setFillStyle(0xffa500);
-            });
+            // COLISIONES
+            this.physics.add.collider(player, bloques); // El jugador choca, no atraviesa
             
-            this.physics.add.collider(balas, bloques, (bala, bloque) => {
-                bloque.getData('visual').destroy(); bloque.destroy();
-                bala.getData('rect').destroy(); bala.destroy();
+            // Bala choca con muro: La bala se destruye, el muro NO
+            this.physics.add.collider(balas, bloques, (bala) => {
+                bala.getData('rect').destroy(); 
+                bala.destroy();
             });
 
             this.physics.add.collider(balas, viruses, (bala, virus) => {
@@ -87,7 +92,7 @@
             });
 
             this.physics.add.overlap(player, viruses, (p, v) => {
-                playerHP -= 15;
+                playerHP -= 20;
                 v.getData('visual').destroy(); v.destroy();
                 if (playerHP <= 0 && !gameOver) endGame();
             });
@@ -109,27 +114,28 @@
 
         function spawnVirus() {
             if (gameOver) return;
-            let x = Phaser.Math.Between(0, 1600);
-            let y = Phaser.Math.Between(0, 900);
-            if (Phaser.Math.Distance.Between(x, y, player.x, player.y) < 300) return;
+            // Aparecen lejos del jugador para que tengan que recorrer el laberinto
+            let x = Phaser.Math.Between(800, 1500);
+            let y = Phaser.Math.Between(600, 1100);
             let vVis = this.add.rectangle(x, y, 25, 25, 0xff003c);
             let v = viruses.create(x, y, null).setSize(25, 25);
             v.setData('visual', vVis);
+            // Los virus también chocan con los muros para que tengan que buscarte por los pasillos
+            this.physics.add.collider(v, bloques);
         }
 
         function update(time) {
             if (gameOver) return;
             player.body.setVelocity(0);
-            player.setFillStyle(0x00ff41); // Reset color
 
-            if (cursors.left.isDown || wasd.A.isDown) player.body.setVelocityX(-300);
-            else if (cursors.right.isDown || wasd.D.isDown) player.body.setVelocityX(300);
-            if (cursors.up.isDown || wasd.W.isDown) player.body.setVelocityY(-300);
-            else if (cursors.down.isDown || wasd.S.isDown) player.body.setVelocityY(300);
+            let speed = 280;
+            if (cursors.left.isDown || wasd.A.isDown) player.body.setVelocityX(-speed);
+            else if (cursors.right.isDown || wasd.D.isDown) player.body.setVelocityX(speed);
+            if (cursors.up.isDown || wasd.W.isDown) player.body.setVelocityY(-speed);
+            else if (cursors.down.isDown || wasd.S.isDown) player.body.setVelocityY(speed);
 
             if (playerAmmo < 3 && time > lastReload + 1200) { playerAmmo++; lastReload = time; }
 
-            // POSICIONAR UI SOBRE EL JUGADOR
             healthBar.x = player.x; healthBar.y = player.y - 35;
             healthBar.width = Math.max(0, (playerHP / 100) * 40);
             healthBar.fillColor = (playerHP > 30) ? 0x00ff00 : 0xff0000;
@@ -143,11 +149,11 @@
             balas.getChildren().forEach(b => {
                 let r = b.getData('rect');
                 if (r) { r.x = b.x; r.y = b.y; }
-                if (Phaser.Math.Distance.Between(b.x, b.y, player.x, player.y) > 600) { r.destroy(); b.destroy(); }
+                if (Phaser.Math.Distance.Between(b.x, b.y, player.x, player.y) > 500) { r.destroy(); b.destroy(); }
             });
 
             viruses.getChildren().forEach(v => {
-                this.physics.moveToObject(v, player, 120);
+                this.physics.moveToObject(v, player, 130);
                 let vis = v.getData('visual');
                 if (vis) { vis.x = v.x; vis.y = v.y; }
             });
