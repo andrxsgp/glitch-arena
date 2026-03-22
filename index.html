@@ -2,19 +2,48 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>GLITCH ARENA - Alpha</title>
+    <title>GLITCH ARENA - Alpha 0.2</title>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-arcade-physics.min.js"></script>
     <style>
         body { margin: 0; background-color: #050505; color: #00ff41; font-family: monospace; overflow: hidden; display: flex; flex-direction: column; align-items: center; }
         canvas { border: 2px solid #ff003c; box-shadow: 0 0 20px #ff003c; margin-top: 20px; }
+        .game-over-screen {
+            display: none;
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.9);
+            color: #ff003c;
+            font-size: 3rem;
+            text-align: center;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            z-index: 1000;
+        }
+        .game-over-screen button {
+            background: #ff003c;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            cursor: pointer;
+            margin-top: 20px;
+            font-size: 1.5rem;
+        }
     </style>
 </head>
 <body>
     <h1>[ GLITCH ARENA ]</h1>
-    <p>WASD: Mover | CLIC: Disparar (Munición: 3)</p>
+    <p>WASD: Mover | CLIC: Disparar | Virus eliminados: <span id="virusEliminados">0</span></p>
+
+    <div id="gameOverScreen" class="game-over-screen">
+        <p>SISTEMA CAÍDO</p>
+        <button onclick="window.location.reload()">REINICIAR SERVIDOR</button>
+    </div>
+
     <script>
         const config = {
             type: Phaser.AUTO,
+            // Tamaño visible de la ventana del juego
             width: 800,
             height: 450,
             backgroundColor: '#0a0a0a',
@@ -23,107 +52,107 @@
         };
 
         const game = new Phaser.Game(config);
-        let player, wasd, cursors, balas, bloques;
+        let player, wasd, cursors, balas, bloques, viruses;
         let healthBar, ammoBars = [];
         let playerHP = 100;
         let playerAmmo = 3;
         let lastReload = 0;
+        let virusCount = 0;
+        let gameOver = false;
 
         function preload() {}
 
         function create() {
+            // Establecer el tamaño del mundo virtual
+            this.physics.world.setBounds(0, 0, 1600, 900); // Doble de grande
+
+            // CAMARA: Sigue al jugador
+            this.cameras.main.setBounds(0, 0, 1600, 900);
+            this.cameras.main.setZoom(1); // Puedes ajustar esto para ver más o menos
+
             // Personaje: BIT
-            player = this.add.rectangle(100, 225, 30, 30, 0x00ff41);
+            player = this.add.rectangle(100, 450, 30, 30, 0x00ff41);
             this.physics.add.existing(player);
             player.body.setCollideWorldBounds(true);
-
-            // UI: Barra de Vida
-            healthBar = this.add.rectangle(0, 0, 40, 5, 0x00ff00);
-            
-            // UI: Barras de Munición (3 pequeñas líneas)
-            for(let i=0; i<3; i++) {
-                ammoBars[i] = this.add.rectangle(0, 0, 10, 3, 0x00e5ff);
-            }
+            this.cameras.main.startFollow(player, true, 0.05, 0.05); // Suave seguimiento
 
             // Grupos
             balas = this.physics.add.group();
             bloques = this.physics.add.staticGroup();
+            viruses = this.physics.add.group(); // Grupo para los enemigos
 
-            // Generar Bloques
-            for (let i = 0; i < 12; i++) {
-                let x = Phaser.Math.Between(300, 750);
-                let y = Phaser.Math.Between(50, 400);
+            // Generar Bloques de Datos (más dispersos en el mapa grande)
+            for (let i = 0; i < 30; i++) { // Más bloques para un mapa más grande
+                let x = Phaser.Math.Between(50, 1550); // Coordenadas del mundo grande
+                let y = Phaser.Math.Between(50, 850);
                 let visual = this.add.rectangle(x, y, 40, 40, 0x1a1a1a).setStrokeStyle(2, 0x00ff41);
                 let b = bloques.create(x, y, null).setSize(40, 40).refreshBody();
                 b.setData('visual', visual);
             }
 
-            // Colisiones
+            // UI: Barra de Vida (aparece sobre el jugador, se actualizará en update)
+            healthBar = this.add.rectangle(0, 0, 40, 5, 0x00ff00).setScrollFactor(0); // ScrollFactor(0) para que no se mueva con la cámara
+            
+            // UI: Barras de Munición (también con setScrollFactor(0))
+            for(let i=0; i<3; i++) {
+                ammoBars[i] = this.add.rectangle(0, 0, 10, 3, 0x00e5ff).setScrollFactor(0);
+            }
+            // Posicionamos las barras de munición fijas en la esquina
+            ammoBars[0].x = 700; ammoBars[0].y = 400;
+            ammoBars[1].x = 714; ammoBars[1].y = 400;
+            ammoBars[2].x = 728; ammoBars[2].y = 400;
+
+            // --- ENEMIGOS: VIRUS ---
+            // Timer para generar Virus cada 3 segundos
+            this.time.addEvent({
+                delay: 3000,
+                callback: spawnVirus,
+                callbackScope: this,
+                loop: true
+            });
+
+            // Colisiones y Overlaps (interacciones)
             this.physics.add.collider(player, bloques);
             this.physics.add.collider(balas, bloques, (bala, bloque) => {
-                bloque.getData('visual').destroy();
-                bloque.destroy();
-                bala.getData('rect').destroy();
-                bala.destroy();
+                bloque.getData('visual').destroy(); bloque.destroy();
+                bala.getData('rect').destroy(); bala.destroy();
             });
+
+            // Bala golpea a Virus
+            this.physics.add.collider(balas, viruses, (bala, virus) => {
+                virus.getData('visual').destroy(); // Borra el cuadrado rojo
+                virus.destroy(); // Borra la física del virus
+                bala.getData('rect').destroy(); bala.destroy();
+                virusCount++;
+                document.getElementById('virusEliminados').innerText = virusCount;
+            });
+
+            // Jugador es tocado por Virus
+            this.physics.add.overlap(player, viruses, (playerObj, virusObj) => {
+                if (!gameOver) {
+                    playerHP -= 10; // Quita 10 de vida
+                    virusObj.getData('visual').destroy(); // Borra el virus al tocarte
+                    virusObj.destroy();
+                    
+                    player.setFillStyle(0xff003c); // Parpadeo rojo al recibir daño
+                    this.time.delayedCall(150, () => player.setFillStyle(0x00ff41));
+                    
+                    if (playerHP <= 0) {
+                        gameOver = true;
+                        this.physics.pause();
+                        document.getElementById('gameOverScreen').style.display = 'flex';
+                    }
+                }
+            });
+
 
             // Controles
             cursors = this.input.keyboard.createCursorKeys();
             wasd = this.input.keyboard.addKeys('W,A,S,D');
 
-            // Disparo con Munición
+            // Disparo
             this.input.on('pointerdown', (pointer) => {
-                if (playerAmmo > 0) {
+                if (!gameOver && playerAmmo > 0) {
                     playerAmmo--;
                     let balaRect = this.add.rectangle(player.x, player.y, 10, 10, 0x00e5ff);
-                    let bala = balas.create(player.x, player.y, null).setSize(10, 10);
-                    bala.setData('rect', balaRect);
-                    this.physics.moveToObject(bala, pointer, 500);
-                } else {
-                    // Efecto de "Sin Munición"
-                    player.setFillStyle(0xff0000);
-                    this.time.delayedCall(100, () => player.setFillStyle(0x00ff41));
-                }
-            });
-        }
-
-        function update(time) {
-            player.body.setVelocity(0);
-            let speed = 250;
-
-            // Movimiento
-            if (cursors.left.isDown || wasd.A.isDown) player.body.setVelocityX(-speed);
-            else if (cursors.right.isDown || wasd.D.isDown) player.body.setVelocityX(speed);
-            if (cursors.up.isDown || wasd.W.isDown) player.body.setVelocityY(-speed);
-            else if (cursors.down.isDown || wasd.S.isDown) player.body.setVelocityY(speed);
-
-            // Recarga de munición (Cada 1.5 segundos)
-            if (playerAmmo < 3 && time > lastReload + 1500) {
-                playerAmmo++;
-                lastReload = time;
-            }
-
-            // Actualizar Barras sobre el jugador
-            healthBar.x = player.x;
-            healthBar.y = player.y - 30;
-            healthBar.width = (playerHP / 100) * 40;
-
-            for(let i=0; i<3; i++) {
-                ammoBars[i].x = (player.x - 14) + (i * 14);
-                ammoBars[i].y = player.y - 22;
-                ammoBars[i].visible = (i < playerAmmo);
-            }
-
-            // Actualizar visual de balas
-            balas.getChildren().forEach(bala => {
-                let rect = bala.getData('rect');
-                if (rect) { rect.x = bala.x; rect.y = bala.y; }
-                if (bala.x < 0 || bala.x > 800 || bala.y < 0 || bala.y > 450) {
-                    rect.destroy();
-                    bala.destroy();
-                }
-            });
-        }
-    </script>
-</body>
-</html>
+                    let bala = balas.create(player.x, player.y, null).setSize(10,
