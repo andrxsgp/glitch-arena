@@ -2,20 +2,27 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>GLITCH ARENA - Alpha 0.4</title>
+    <title>GLITCH ARENA - Súper Pulso</title>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-arcade-physics.min.js"></script>
     <style>
         body { margin: 0; background-color: #050505; color: #00ff41; font-family: monospace; overflow: hidden; display: flex; flex-direction: column; align-items: center; }
         canvas { border: 2px solid #ff003c; box-shadow: 0 0 20px #ff003c; margin-top: 20px; }
+        .ui-text { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); pointer-events: none; text-align: center; }
+        #superStatus { color: #00e5ff; font-weight: bold; display: none; }
         .game-over-screen { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); color: #ff003c; font-size: 3rem; text-align: center; justify-content: center; align-items: center; flex-direction: column; z-index: 1000; }
-        button { background: #ff003c; color: white; padding: 10px 20px; border: none; cursor: pointer; font-family: monospace; }
+        button { background: #ff003c; color: white; padding: 10px 20px; border: none; cursor: pointer; font-family: monospace; margin-top: 20px; }
     </style>
 </head>
 <body>
-    <h1>[ GLITCH ARENA ]</h1>
+    <div class="ui-text">
+        <h1>[ GLITCH ARENA ]</h1>
+        <p>Elimina 5 Virus para el SÚPER | <span id="virusCountText">0</span>/5</p>
+        <div id="superStatus">¡SÚPER LISTO! (Presiona ESPACIO)</div>
+    </div>
+
     <div id="gameOverScreen" class="game-over-screen">
-        <p>CONEXIÓN PERDIDA</p>
-        <button onclick="window.location.reload()">REINTENTAR</button>
+        <p>SISTEMA CAÍDO</p>
+        <button onclick="window.location.reload()">REINICIAR</button>
     </div>
 
     <script>
@@ -29,9 +36,9 @@
         };
 
         const game = new Phaser.Game(config);
-        let player, wasd, cursors, balas, bloques, viruses;
+        let player, wasd, spaceKey, cursors, balas, bloques, viruses, pulseRing;
         let healthBar, ammoBars = [];
-        let playerHP = 100, playerAmmo = 3, lastReload = 0, virusCount = 0, gameOver = false;
+        let playerHP = 100, playerAmmo = 3, lastReload = 0, killsForSuper = 0, gameOver = false, superReady = false;
 
         function preload() {}
 
@@ -39,62 +46,67 @@
             this.physics.world.setBounds(0, 0, 1600, 1200);
             this.cameras.main.setBounds(0, 0, 1600, 1200);
 
-            // Grupos primero para que los objetos puedan referenciarlos
             balas = this.physics.add.group();
             bloques = this.physics.add.staticGroup();
             viruses = this.physics.add.group();
 
-            // GENERACIÓN DE MUROS (Ajustados)
+            // Laberinto
             const tileSize = 80;
-            const wallSize = 60; // Un poco más pequeños que el tile para dejar pasillos claros
+            const wallSize = 60; 
             for (let x = 0; x < 1600; x += tileSize) {
                 for (let y = 0; y < 1200; y += tileSize) {
-                    if (x < 200 && y < 200) continue;
+                    if (x < 240 && y < 240) continue;
                     if (Phaser.Math.Between(0, 10) > 7) { 
-                        let visual = this.add.rectangle(x + 40, y + 40, wallSize, wallSize, 0x1a1a1a).setStrokeStyle(2, 0x00ff41);
-                        visual.setDepth(1); // Muros en capa inferior
+                        let visual = this.add.rectangle(x + 40, y + 40, wallSize, wallSize, 0x1a1a1a).setStrokeStyle(2, 0x00ff41).setDepth(1);
                         let b = bloques.create(x + 40, y + 40, null);
-                        b.setSize(wallSize, wallSize).refreshBody(); // Hitbox exacta
+                        b.body.setSize(wallSize, wallSize);
+                        b.refreshBody();
                         b.setData('visual', visual);
                     }
                 }
             }
 
-            // Personaje: BIT (Depth alta para estar siempre ARRIBA)
-            player = this.add.rectangle(100, 100, 30, 30, 0x00ff41);
-            player.setDepth(10); 
+            // Personaje
+            player = this.add.rectangle(120, 120, 30, 30, 0x00ff41).setDepth(10);
             this.physics.add.existing(player);
             player.body.setCollideWorldBounds(true);
             this.cameras.main.startFollow(player, true, 0.1, 0.1);
 
-            // UI
+            // UI de Vida y Munición
             healthBar = this.add.rectangle(0, 0, 40, 5, 0x00ff00).setDepth(11);
-            for(let i=0; i<3; i++) { 
-                ammoBars[i] = this.add.rectangle(0, 0, 10, 3, 0x00e5ff).setDepth(11); 
-            }
+            for(let i=0; i<3; i++) { ammoBars[i] = this.add.rectangle(0, 0, 10, 3, 0x00e5ff).setDepth(11); }
 
-            this.time.addEvent({ delay: 2500, callback: spawnVirus, callbackScope: this, loop: true });
+            // Onda del Súper (Invisible al inicio)
+            pulseRing = this.add.circle(0, 0, 10, 0x00e5ff, 0.3).setDepth(5).setVisible(false);
 
-            // FÍSICAS
+            // Eventos
+            this.time.addEvent({ delay: 2000, callback: spawnVirus, callbackScope: this, loop: true });
+            
             this.physics.add.collider(player, bloques);
-            this.physics.add.collider(balas, bloques, (bala) => {
-                if(bala.getData('rect')) bala.getData('rect').destroy();
-                bala.destroy();
-            });
             this.physics.add.collider(viruses, bloques);
+            this.physics.add.collider(balas, bloques, (b) => { if(b.getData('rect')) b.getData('rect').destroy(); b.destroy(); });
+
             this.physics.add.collider(balas, viruses, (bala, virus) => {
                 virus.getData('visual').destroy(); virus.destroy();
                 bala.getData('rect').destroy(); bala.destroy();
-                virusCount++;
+                if(!superReady) {
+                    killsForSuper++;
+                    document.getElementById('virusCountText').innerText = killsForSuper;
+                    if(killsForSuper >= 5) {
+                        superReady = true;
+                        document.getElementById('superStatus').style.display = 'block';
+                    }
+                }
             });
+
             this.physics.add.overlap(player, viruses, (p, v) => {
-                playerHP -= 20;
-                v.getData('visual').destroy(); v.destroy();
+                playerHP -= 20; v.getData('visual').destroy(); v.destroy();
                 if (playerHP <= 0 && !gameOver) endGame();
             });
 
             cursors = this.input.keyboard.createCursorKeys();
             wasd = this.input.keyboard.addKeys('W,A,S,D');
+            spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
 
             this.input.on('pointerdown', (pointer) => {
                 if (!gameOver && playerAmmo > 0) {
@@ -110,14 +122,45 @@
 
         function spawnVirus() {
             if (gameOver) return;
-            let x = Phaser.Math.Between(800, 1500), y = Phaser.Math.Between(600, 1100);
+            let x = Phaser.Math.Between(500, 1500), y = Phaser.Math.Between(400, 1100);
             let vVis = this.add.rectangle(x, y, 25, 25, 0xff003c).setDepth(5);
             let v = viruses.create(x, y, null).setSize(25, 25);
             v.setData('visual', vVis);
         }
 
+        function activateSuper() {
+            superReady = false;
+            killsForSuper = 0;
+            document.getElementById('superStatus').style.display = 'none';
+            document.getElementById('virusCountText').innerText = "0";
+
+            // Animación de la onda
+            pulseRing.setPosition(player.x, player.y).setVisible(true).setRadius(10).setAlpha(0.6);
+            this.tweens.add({
+                targets: pulseRing,
+                radius: 200,
+                alpha: 0,
+                duration: 400,
+                onComplete: () => pulseRing.setVisible(false)
+            });
+
+            // Lógica de empuje
+            viruses.getChildren().forEach(v => {
+                let dist = Phaser.Math.Distance.Between(player.x, player.y, v.x, v.y);
+                if (dist < 200) {
+                    let angle = Phaser.Math.Angle.Between(player.x, player.y, v.x, v.y);
+                    v.body.setVelocity(Math.cos(angle) * 1000, Math.sin(angle) * 1000);
+                    // El virus se queda aturdido un momento
+                    v.setData('stunned', true);
+                    this.time.delayedCall(800, () => v.setData('stunned', false));
+                }
+            });
+        }
+
         function update(time) {
             if (gameOver) return;
+            
+            // Movimiento
             player.body.setVelocity(0);
             let speed = 280;
             if (cursors.left.isDown || wasd.A.isDown) player.body.setVelocityX(-speed);
@@ -125,25 +168,33 @@
             if (cursors.up.isDown || wasd.W.isDown) player.body.setVelocityY(-speed);
             else if (cursors.down.isDown || wasd.S.isDown) player.body.setVelocityY(speed);
 
+            // Activar Súper
+            if (Phaser.Input.Keyboard.JustDown(spaceKey) && superReady) {
+                activateSuper.call(this.scene.scenes[0]);
+            }
+
+            // Recarga
             if (playerAmmo < 3 && time > lastReload + 1200) { playerAmmo++; lastReload = time; }
 
+            // UI dinámico
             healthBar.x = player.x; healthBar.y = player.y - 35;
             healthBar.width = Math.max(0, (playerHP / 100) * 40);
-
             for(let i=0; i<3; i++) {
                 ammoBars[i].x = (player.x - 14) + (i * 14);
                 ammoBars[i].y = player.y - 25;
                 ammoBars[i].visible = (i < playerAmmo);
             }
 
+            // Balas y Virus
             balas.getChildren().forEach(b => {
-                let r = b.getData('rect');
-                if (r) { r.x = b.x; r.y = b.y; }
+                let r = b.getData('rect'); if (r) { r.x = b.x; r.y = b.y; }
                 if (Phaser.Math.Distance.Between(b.x, b.y, player.x, player.y) > 500) { if(r) r.destroy(); b.destroy(); }
             });
 
             viruses.getChildren().forEach(v => {
-                this.physics.moveToObject(v, player, 130);
+                if(!v.getData('stunned')) {
+                    this.physics.moveToObject(v, player, 130);
+                }
                 let vis = v.getData('visual');
                 if (vis) { vis.x = v.x; vis.y = v.y; }
             });
