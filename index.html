@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>CORE ARENA - Solid Labyrinth</title>
+    <title>CORE ARENA - Smooth Labyrinth</title>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-arcade-physics.min.js"></script>
     <style>
         body { margin: 0; background-color: #050505; color: #00ff41; font-family: 'Courier New', monospace; overflow: hidden; display: flex; flex-direction: column; align-items: center; }
@@ -13,7 +13,7 @@
 </head>
 <body>
     <div class="ui-container">
-        <h1 style="margin:0;">[ CORE LABYRINTH ]</h1>
+        <h1 style="margin:0;">[ CORE ARENA ]</h1>
         <p style="margin:5px;">Súper: <span id="sCount">0</span>/5 | <span id="superReady">¡SÚPER LISTO!</span></p>
     </div>
 
@@ -44,27 +44,29 @@
             bloques = this.physics.add.staticGroup();
             viruses = this.physics.add.group();
 
-            // --- GENERACIÓN DE MUROS CONTINUOS ---
+            // --- GENERACIÓN DE MUROS LISOS (ARCOS) ---
             const radii = [140, 300, 480, 680]; 
             radii.forEach((r, index) => {
-                let segments = Math.floor(r / 8); 
-                let gap1 = (index * 90); // Rotamos las puertas en cada anillo
+                // Dibujamos secciones largas de muro para que sean lisas
+                let segments = 32; 
+                let gap1 = (index * 90); 
                 let gap2 = gap1 + 180;
 
                 for (let i = 0; i < segments; i++) {
                     let angleDeg = (360 / segments) * i;
                     
-                    // Solo dibujamos si NO es una puerta (gap)
-                    if (Math.abs(angleDeg - gap1) > 15 && Math.abs(angleDeg - gap2) > 15) {
+                    // Solo creamos muro si no es zona de puerta
+                    if (Math.abs(angleDeg - gap1) > 20 && Math.abs(angleDeg - gap2) > 20) {
                         let rad = Phaser.Math.DegToRad(angleDeg);
                         let px = CX + Math.cos(rad) * r;
                         let py = CY + Math.sin(rad) * r;
 
-                        // Creamos un muro que se solapa ligeramente con el anterior para ser continuo
-                        let wall = this.add.rectangle(px, py, 35, 35, 0x000000).setStrokeStyle(2, 0x00ff41);
-                        wall.rotation = rad; // El muro rota para seguir el círculo
+                        // Muro liso y largo que rota hacia el centro
+                        let wall = this.add.rectangle(px, py, 45, 15, 0x000000).setStrokeStyle(2, 0x00ff41);
+                        wall.rotation = rad + Math.PI/2; 
                         
-                        let b = bloques.create(px, py, null).setSize(30, 30).refreshBody();
+                        // La colisión física ahora es un bloque que se solapa suavemente
+                        let b = bloques.create(px, py, null).setSize(35, 35).refreshBody();
                         b.setVisible(false);
                     }
                 }
@@ -73,6 +75,8 @@
             player = this.add.rectangle(CX - 220, CY - 220, 20, 20, 0x00ff41).setDepth(10);
             this.physics.add.existing(player);
             player.body.setCollideWorldBounds(true);
+            // Hacer que el personaje deslice mejor en las paredes
+            player.body.setBounce(0.1); 
             this.cameras.main.startFollow(player, true, 0.1, 0.1);
 
             healthBar = this.add.rectangle(0, 0, 30, 4, 0x00ff00).setDepth(11);
@@ -123,13 +127,6 @@
             });
 
             spawnWave(this);
-
-            this.time.addEvent({ 
-                delay: 1000, 
-                callback: () => {
-                    if (this.time.now - lastActionTime > 4000 && playerHP < 100) playerHP = Math.min(100, playerHP + 15);
-                }, loop: true 
-            });
         }
 
         function spawnWave(scene) {
@@ -200,15 +197,16 @@
             viruses.getChildren().forEach(v => {
                 if(!v.getData('st')) {
                     let angleToPlayer = Phaser.Math.Angle.Between(v.x, v.y, player.x, player.y);
-                    let vx = Math.cos(angleToPlayer) * 125;
-                    let vy = Math.sin(angleToPlayer) * 125;
+                    let vx = Math.cos(angleToPlayer) * 135;
+                    let vy = Math.sin(angleToPlayer) * 135;
 
+                    // Sensor de muros mejorado: Detecta el muro liso y desliza
                     bloques.getChildren().forEach(block => {
                         let d = Phaser.Math.Distance.Between(v.x, v.y, block.x, block.y);
-                        if(d < 55) {
+                        if(d < 50) {
                             let pushAng = Phaser.Math.Angle.Between(block.x, block.y, v.x, v.y);
-                            vx = Math.cos(pushAng + (Math.PI/2 * v.getData('side'))) * 180;
-                            vy = Math.sin(pushAng + (Math.PI/2 * v.getData('side'))) * 180;
+                            vx = Math.cos(pushAng + (Math.PI/2 * v.getData('side'))) * 190;
+                            vy = Math.sin(pushAng + (Math.PI/2 * v.getData('side'))) * 190;
                         }
                     });
                     v.body.setVelocity(vx, vy);
