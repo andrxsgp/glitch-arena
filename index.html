@@ -2,19 +2,18 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>CORE ARENA - Seamless Walls</title>
+    <title>CORE ARENA - True Smooth Arcs</title>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-arcade-physics.min.js"></script>
     <style>
         body { margin: 0; background-color: #050505; color: #00ff41; font-family: 'Courier New', monospace; overflow: hidden; display: flex; flex-direction: column; align-items: center; }
         canvas { border: 2px solid #00e5ff; box-shadow: 0 0 20px #00e5ff; margin-top: 10px; }
         .ui-container { text-align: center; pointer-events: none; margin-top: 10px; }
-        #superReady { color: #00e5ff; font-weight: bold; visibility: hidden; text-shadow: 0 0 8px #00e5ff; }
     </style>
 </head>
 <body>
     <div class="ui-container">
         <h1 style="margin:0;">[ CORE ARENA ]</h1>
-        <p style="margin:5px;">Súper: <span id="sCount">0</span>/5 | <span id="superReady">¡SÚPER LISTO!</span></p>
+        <p style="margin:5px;">Súper: <span id="sCount">0</span>/5</p>
     </div>
 
     <script>
@@ -28,195 +27,100 @@
         };
 
         const game = new Phaser.Game(config);
-        let player, spaceKey, wasd, cursors, balas, bloques, viruses, pulseRing;
-        let playerHP = 100, playerAmmo = 3, kills = 0, lastReload = 0;
-        let lastActionTime = 0, superReady = false, healthBar, ammoBars = [];
-        let isInvulnerable = false;
+        let player, wasd, cursors, viruses, graphics, pulseRing;
+        let playerHP = 100, kills = 0;
+        const CX = 800, CY = 600;
+        
+        // Definición de los anillos: Radio y ángulo de la "puerta" (en grados)
+        const rings = [
+            { r: 150, gap: 0 },
+            { r: 320, gap: 90 },
+            { r: 500, gap: 180 },
+            { r: 700, gap: 270 }
+        ];
 
         function preload() {}
 
         function create() {
-            const W = 1600, H = 1200, CX = 800, CY = 600;
-            this.physics.world.setBounds(0, 0, W, H);
-            this.cameras.main.setBounds(0, 0, W, H).setZoom(0.7);
+            this.physics.world.setBounds(0, 0, 1600, 1200);
+            this.cameras.main.setBounds(0, 0, 1600, 1200).setZoom(0.7);
 
-            balas = this.physics.add.group();
-            bloques = this.physics.add.staticGroup();
-            viruses = this.physics.add.group();
-
-            // --- GENERACIÓN DE MUROS LISOS (SIN FISURAS) ---
-            const radii = [150, 320, 500, 700]; 
-            radii.forEach((r, index) => {
-                // Aumentamos mucho el número de segmentos para que se solapen perfectamente
-                let segments = 60; 
-                let gapAngle = (index * 90); 
-
-                for (let i = 0; i < segments; i++) {
-                    let angleDeg = (360 / segments) * i;
-                    
-                    // Solo creamos muro si no es zona de puerta (hueco de 40 grados)
-                    if (Math.abs(angleDeg - gapAngle) > 25 && Math.abs(angleDeg - (gapAngle + 180)) > 25) {
-                        let rad = Phaser.Math.DegToRad(angleDeg);
-                        let px = CX + Math.cos(rad) * r;
-                        let py = CY + Math.sin(rad) * r;
-
-                        // Muro visual: rectángulos anchos que se solapan
-                        let wall = this.add.rectangle(px, py, 60, 20, 0x000000).setStrokeStyle(2, 0x00ff41);
-                        wall.rotation = rad + Math.PI/2; 
-                        
-                        // FÍSICA: Usamos un cuerpo más pequeño que el visual para que no haya picos
-                        let b = bloques.create(px, py, null).setSize(45, 15).refreshBody();
-                        b.setRotation(wall.rotation);
-                        b.setVisible(false);
-                    }
-                }
+            // Dibujar los Arcos Lisos
+            graphics = this.add.graphics();
+            graphics.lineStyle(6, 0x00ff41, 1);
+            
+            rings.forEach(ring => {
+                // Dibujamos el arco dejando un espacio de 40 grados para la puerta
+                let startAngle = Phaser.Math.DegToRad(ring.gap + 25);
+                let endAngle = Phaser.Math.DegToRad(ring.gap + 335);
+                graphics.beginPath();
+                graphics.arc(CX, CY, ring.r, startAngle, endAngle, false);
+                graphics.strokePath();
             });
 
-            // BIT con colisión CIRCULAR para no trabarse
-            player = this.add.rectangle(CX - 250, CY - 250, 20, 20, 0x00ff41).setDepth(10);
+            viruses = this.physics.add.group();
+            player = this.add.rectangle(CX - 250, CY - 250, 20, 20, 0x00ff41);
             this.physics.add.existing(player);
-            player.body.setCircle(10); // Transformamos el cuadrado en un círculo físico
-            player.body.setCollideWorldBounds(true);
+            player.body.setCircle(10);
             this.cameras.main.startFollow(player, true, 0.1, 0.1);
 
-            healthBar = this.add.rectangle(0, 0, 30, 4, 0x00ff00).setDepth(11);
-            for(let i=0; i<3; i++) ammoBars[i] = this.add.rectangle(0, 0, 8, 3, 0x00e5ff).setDepth(11);
-            pulseRing = this.add.circle(0, 0, 10, 0x00e5ff, 0.3).setVisible(false);
-
-            this.physics.add.collider(player, bloques);
-            this.physics.add.collider(viruses, bloques);
-            this.physics.add.collider(viruses, viruses);
-            this.physics.add.collider(balas, bloques, (b) => { if(b.getData('r')) b.getData('r').destroy(); b.destroy(); });
-
-            this.physics.add.overlap(balas, viruses, (bala, virus) => {
-                virus.setData('hp', virus.getData('hp') - 20);
-                virus.getData('visual').setFillStyle(0xffffff);
-                this.time.delayedCall(50, () => { if(virus.active) virus.getData('visual').setFillStyle(0xff003c); });
-                if(virus.getData('hp') <= 0) { destroyVirus(virus); updateKills(); checkWave(this); }
-                if(bala.getData('r')) bala.getData('r').destroy();
-                bala.destroy();
-            });
-
-            this.physics.add.overlap(player, viruses, (p, v) => {
-                if (!isInvulnerable) {
-                    playerHP -= 20;
-                    lastActionTime = this.time.now;
-                    isInvulnerable = true;
-                    player.setAlpha(0.5);
-                    this.time.delayedCall(1000, () => { if(player.active) { isInvulnerable = false; player.setAlpha(1); }});
-                    if (playerHP <= 0) location.reload();
-                }
-                destroyVirus(v);
-                checkWave(this);
-            });
+            spawnWave(this);
 
             wasd = this.input.keyboard.addKeys('W,A,S,D');
             cursors = this.input.keyboard.createCursorKeys();
-            spaceKey = this.input.keyboard.addKey('SPACE');
+        }
 
-            this.input.on('pointerdown', (pointer) => {
-                if(playerAmmo > 0) {
-                    playerAmmo--;
-                    lastActionTime = this.time.now;
-                    let p = pointer.positionToCamera(this.cameras.main);
-                    let r = this.add.rectangle(player.x, player.y, 6, 6, 0x00e5ff).setDepth(5);
-                    let b = balas.create(player.x, player.y, null).setSize(6, 6).setVisible(false);
-                    b.setData('r', r).setData('startX', player.x).setData('startY', player.y);
-                    this.physics.moveTo(b, p.x, p.y, 600);
+        function handleArcCollision(entity) {
+            const dist = Phaser.Math.Distance.Between(entity.x, entity.y, CX, CY);
+            const angle = Phaser.Math.Angle.Between(CX, CY, entity.x, entity.y);
+            const angleDeg = Phaser.Math.Wrap(Phaser.Math.RadToDeg(angle), 0, 360);
+
+            rings.forEach(ring => {
+                // Si la entidad está sobre el radio del anillo
+                if (Math.abs(dist - ring.r) < 10) {
+                    // Y NO está en el área de la puerta (margen de 30 grados)
+                    let diff = Math.abs(angleDeg - ring.gap);
+                    if (diff > 180) diff = 360 - diff;
+
+                    if (diff > 25) {
+                        // Empuje matemático hacia afuera o adentro para rebotar suavemente
+                        const pushDir = (dist > ring.r) ? 1 : -1;
+                        const angleRad = Phaser.Math.DegToRad(angleDeg);
+                        entity.x = CX + Math.cos(angleRad) * (ring.r + (12 * pushDir));
+                        entity.y = CY + Math.sin(angleRad) * (ring.r + (12 * pushDir));
+                    }
                 }
             });
-
-            spawnWave(this);
         }
 
         function spawnWave(scene) {
             for(let i=0; i<3; i++) {
-                let vVis = scene.add.triangle(0, 0, 0, 20, 10, 0, 20, 20, 0xff003c).setDepth(5);
-                let v = viruses.create(800, 600, null).setSize(20, 20).setVisible(false);
-                v.body.setCircle(10); // Virus circular también
-                let angle = Math.random() * Math.PI * 2;
-                v.setVelocity(Math.cos(angle) * 160, Math.sin(angle) * 160);
-                v.setData('visual', vVis).setData('hp', 60).setData('side', Phaser.Math.RND.pick([-1, 1]));
+                let v = scene.add.triangle(0, 0, 0, 20, 10, 0, 20, 20, 0xff003c);
+                scene.physics.add.existing(v);
+                v.body.setCircle(10);
+                v.setPosition(CX, CY);
+                let ang = Math.random() * Math.PI * 2;
+                v.body.setVelocity(Math.cos(ang) * 150, Math.sin(ang) * 150);
+                viruses.add(v);
             }
         }
 
-        function checkWave(scene) {
-            if (viruses.countActive() === 0) scene.time.delayedCall(1200, () => spawnWave(scene));
-        }
-
-        function destroyVirus(v) {
-            if(v.getData('visual')) v.getData('visual').destroy();
-            v.destroy();
-        }
-
-        function updateKills() {
-            if(!superReady) {
-                kills++;
-                document.getElementById('sCount').innerText = kills;
-                if(kills >= 5) { superReady = true; document.getElementById('superReady').style.visibility = 'visible'; }
-            }
-        }
-
-        function update(time) {
+        function update() {
             player.body.setVelocity(0);
-            let s = 300;
-            if (wasd.A.isDown || cursors.left.isDown) player.body.setVelocityX(-s);
-            else if (wasd.D.isDown || cursors.right.isDown) player.body.setVelocityX(s);
-            if (wasd.W.isDown || cursors.up.isDown) player.body.setVelocityY(-s);
-            else if (wasd.S.isDown || cursors.down.isDown) player.body.setVelocityY(s);
+            if (wasd.A.isDown || cursors.left.isDown) player.body.setVelocityX(-300);
+            else if (wasd.D.isDown || cursors.right.isDown) player.body.setVelocityX(300);
+            if (wasd.W.isDown || cursors.up.isDown) player.body.setVelocityY(-300);
+            else if (wasd.S.isDown || cursors.down.isDown) player.body.setVelocityY(300);
 
-            if (Phaser.Input.Keyboard.JustDown(spaceKey) && superReady) {
-                superReady = false; kills = 0;
-                document.getElementById('sCount').innerText = "0";
-                document.getElementById('superReady').style.visibility = 'hidden';
-                pulseRing.setPosition(player.x, player.y).setVisible(true).setRadius(10).setAlpha(0.6);
-                this.tweens.add({ targets: pulseRing, radius: 220, alpha: 0, duration: 400, onComplete: () => pulseRing.setVisible(false) });
-                viruses.getChildren().forEach(v => {
-                    if(Phaser.Math.Distance.Between(player.x, player.y, v.x, v.y) < 220) {
-                        let ang = Phaser.Math.Angle.Between(player.x, player.y, v.x, v.y);
-                        v.body.setVelocity(Math.cos(ang)*800, Math.sin(ang)*800);
-                        v.setData('st', true);
-                        this.time.delayedCall(600, () => { if(v.active) v.setData('st', false); });
-                    }
-                });
-            }
-
-            if (playerAmmo < 3 && time > lastReload + 1200) { playerAmmo++; lastReload = time; }
-            healthBar.setPosition(player.x, player.y - 25).width = (playerHP/100)*30;
-            for(let i=0; i<3; i++) {
-                ammoBars[i].setPosition(player.x - 10 + (i*10), player.y - 18);
-                ammoBars[i].visible = (i < playerAmmo);
-            }
-
-            balas.getChildren().forEach(b => { 
-                if(b.getData('r')) { b.getData('r').x = b.x; b.getData('r').y = b.y; }
-                if(Phaser.Math.Distance.Between(b.x, b.y, b.getData('startX'), b.getData('startY')) > 450) {
-                    if(b.getData('r')) b.getData('r').destroy(); b.destroy();
-                }
-            });
-
+            // Aplicar colisión de arco liso a todos
+            handleArcCollision(player);
             viruses.getChildren().forEach(v => {
-                if(!v.getData('st')) {
-                    let angleToPlayer = Phaser.Math.Angle.Between(v.x, v.y, player.x, player.y);
-                    let vx = Math.cos(angleToPlayer) * 140;
-                    let vy = Math.sin(angleToPlayer) * 140;
-
-                    // Sensor de proximidad a muros mejorado para evitar el "tartamudeo"
-                    bloques.getChildren().forEach(block => {
-                        let d = Phaser.Math.Distance.Between(v.x, v.y, block.x, block.y);
-                        if(d < 65) {
-                            let pushAng = Phaser.Math.Angle.Between(block.x, block.y, v.x, v.y);
-                            vx = Math.cos(pushAng + (Math.PI/2 * v.getData('side'))) * 200;
-                            vy = Math.sin(pushAng + (Math.PI/2 * v.getData('side'))) * 200;
-                        }
-                    });
-                    v.body.setVelocity(vx, vy);
-                }
-                let vis = v.getData('visual');
-                if(vis) { 
-                    vis.x = v.x; vis.y = v.y;
-                    vis.rotation = v.body.angle + Math.PI/2;
-                }
+                handleArcCollision(v);
+                
+                // IA de seguimiento simple
+                let angle = Phaser.Math.Angle.Between(v.x, v.y, player.x, player.y);
+                v.body.setVelocity(Math.cos(angle) * 140, Math.sin(angle) * 140);
+                v.rotation = angle + Math.PI/2;
             });
         }
     </script>
