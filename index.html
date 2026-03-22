@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>GLITCH ARENA - Muros Organizados</title>
+    <title>GLITCH ARENA - Virus Triangulares</title>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-arcade-physics.min.js"></script>
     <style>
         body { margin: 0; background-color: #050505; color: #00ff41; font-family: 'Courier New', monospace; overflow: hidden; display: flex; flex-direction: column; align-items: center; }
@@ -14,7 +14,7 @@
 <body>
     <div class="ui-container">
         <h1 style="margin:0;">[ GLITCH ARENA ]</h1>
-        <p style="margin:5px;">Súper: <span id="sCount">0</span>/5 | <span id="superReady">¡PRESIONA ESPACIO!</span></p>
+        <p style="margin:5px;">Súper: <span id="sCount">0</span>/5 | <span id="superReady">¡SÚPER LISTO! (ESPACIO)</span></p>
     </div>
 
     <script>
@@ -30,8 +30,7 @@
         const game = new Phaser.Game(config);
         let player, spaceKey, wasd, balas, bloques, viruses, pulseRing;
         let playerHP = 100, playerAmmo = 3, kills = 0, lastReload = 0;
-        let isGameOver = false, superReady = false;
-        let healthBar, ammoBars = [];
+        let superReady = false, healthBar, ammoBars = [];
 
         function preload() {}
 
@@ -43,63 +42,56 @@
             bloques = this.physics.add.staticGroup();
             viruses = this.physics.add.group();
 
-            // --- GENERACIÓN DE MUROS EN HILERAS ---
-            const wallSize = 40; // Muros más pequeños
-            const numGrupos = 35; // Cuántas "hileras" queremos
-
-            for (let i = 0; i < numGrupos; i++) {
-                // Punto de origen aleatorio (evitando el spawn del jugador)
-                let startX = Phaser.Math.Between(300, 1500);
-                let startY = Phaser.Math.Between(300, 1100);
-                
-                let esHorizontal = Phaser.Math.Between(0, 1);
-                let largoHilera = Phaser.Math.Between(3, 4);
-
-                for (let j = 0; j < largoHilera; j++) {
-                    let posX = esHorizontal ? startX + (j * wallSize) : startX;
-                    let posY = esHorizontal ? startY : startY + (j * wallSize);
-
-                    // Evitar que se salgan del mundo
+            // Muros Organizados (40px)
+            const wallSize = 40;
+            for (let i = 0; i < 35; i++) {
+                let startX = Phaser.Math.Between(300, 1500), startY = Phaser.Math.Between(300, 1100);
+                let esHor = Phaser.Math.Between(0, 1), largo = Phaser.Math.Between(3, 4);
+                for (let j = 0; j < largo; j++) {
+                    let posX = esHor ? startX + (j * wallSize) : startX;
+                    let posY = esHor ? startY : startY + (j * wallSize);
                     if (posX < 1550 && posY < 1150) {
-                        let visual = this.add.rectangle(posX, posY, wallSize, wallSize, 0x1a1a1a)
-                                         .setStrokeStyle(2, 0x00ff41).setDepth(1);
-                        let b = bloques.create(posX, posY, null).setSize(wallSize, wallSize).refreshBody();
-                        b.setData('visual', visual);
+                        let visual = this.add.rectangle(posX, posY, wallSize, wallSize, 0x1a1a1a).setStrokeStyle(2, 0x00ff41).setDepth(1);
+                        bloques.create(posX, posY, null).setSize(wallSize, wallSize).refreshBody().setData('visual', visual);
                     }
                 }
             }
 
-            // Jugador
-            player = this.add.rectangle(100, 100, 25, 25, 0x00ff41).setDepth(10);
+            // BIT (Jugador)
+            player = this.add.rectangle(120, 120, 25, 25, 0x00ff41).setDepth(10);
             this.physics.add.existing(player);
             player.body.setCollideWorldBounds(true);
             this.cameras.main.startFollow(player, true, 0.1, 0.1);
 
-            // UI (Vida y Munición)
+            // UI y Efectos
             healthBar = this.add.rectangle(0, 0, 40, 5, 0x00ff00).setDepth(11);
             for(let i=0; i<3; i++) ammoBars[i] = this.add.rectangle(0, 0, 10, 3, 0x00e5ff).setDepth(11);
             pulseRing = this.add.circle(0, 0, 10, 0x00e5ff, 0.4).setVisible(false).setDepth(5);
 
-            // Colisiones y Eventos
+            // Colisiones
             this.physics.add.collider(player, bloques);
             this.physics.add.collider(viruses, bloques);
-            this.physics.add.collider(balas, bloques, (b) => { 
-                if(b.getData('r')) b.getData('r').destroy(); 
-                b.destroy(); 
-            });
+            this.physics.add.collider(balas, bloques, (b) => { if(b.getData('r')) b.getData('r').destroy(); b.destroy(); });
 
-            this.physics.add.collider(balas, viruses, (bala, virus) => {
-                if(virus.getData('visual')) virus.getData('visual').destroy();
-                virus.destroy();
+            this.physics.add.overlap(balas, viruses, (bala, virus) => {
+                virus.setData('hp', virus.getData('hp') - 20);
+                virus.getData('visual').setFillStyle(0xffffff);
+                this.time.delayedCall(50, () => { if(virus.active) virus.getData('visual').setFillStyle(0xff003c); });
+
+                let hpBar = virus.getData('hpBar');
+                hpBar.setVisible(true).width = (virus.getData('hp') / 60) * 25;
+
+                if(virus.getData('hp') <= 0) {
+                    destroyVirus(virus);
+                    updateKills();
+                }
                 if(bala.getData('r')) bala.getData('r').destroy();
                 bala.destroy();
-                updateKills();
             });
 
             this.physics.add.overlap(player, viruses, (p, v) => {
                 playerHP -= 20;
-                if(v.getData('visual')) v.getData('visual').destroy();
-                v.destroy();
+                destroyVirus(v);
                 if(playerHP <= 0) location.reload();
             });
 
@@ -112,7 +104,7 @@
                     let p = pointer.positionToCamera(this.cameras.main);
                     let r = this.add.rectangle(player.x, player.y, 8, 8, 0x00e5ff).setDepth(5);
                     let b = balas.create(player.x, player.y, null).setSize(8, 8);
-                    b.setData('r', r);
+                    b.setData('r', r).setData('startX', player.x).setData('startY', player.y);
                     this.physics.moveTo(b, p.x, p.y, 600);
                 }
             });
@@ -122,9 +114,19 @@
 
         function spawnVirus() {
             let x = Phaser.Math.Between(400, 1500), y = Phaser.Math.Between(400, 1100);
-            let vVis = this.add.rectangle(x, y, 22, 22, 0xff003c).setDepth(5);
-            let v = viruses.create(x, y, null).setSize(22, 22);
-            v.setData('visual', vVis);
+            
+            // CAMBIO: Virus ahora es un Triángulo
+            let vVis = this.add.triangle(x, y, 0, 24, 12, 0, 24, 24, 0xff003c).setDepth(5);
+            let vHpBar = this.add.rectangle(x, y - 20, 25, 4, 0xff0000).setDepth(6).setVisible(false);
+            
+            let v = viruses.create(x, y, null).setSize(24, 24); // Hitbox ajustada
+            v.setData('visual', vVis).setData('hpBar', vHpBar).setData('hp', 60);
+        }
+
+        function destroyVirus(v) {
+            if(v.getData('visual')) v.getData('visual').destroy();
+            if(v.getData('hpBar')) v.getData('hpBar').destroy();
+            v.destroy();
         }
 
         function updateKills() {
@@ -140,7 +142,7 @@
 
         function update(time) {
             player.body.setVelocity(0);
-            let s = 300; // Un poco más rápido para libertad de movimiento
+            let s = 300;
             if (wasd.A.isDown) player.body.setVelocityX(-s);
             else if (wasd.D.isDown) player.body.setVelocityX(s);
             if (wasd.W.isDown) player.body.setVelocityY(-s);
@@ -151,13 +153,14 @@
                 document.getElementById('sCount').innerText = "0";
                 document.getElementById('superReady').style.visibility = 'hidden';
                 pulseRing.setPosition(player.x, player.y).setVisible(true).setRadius(10).setAlpha(0.6);
-                this.tweens.add({ targets: pulseRing, radius: 250, alpha: 0, duration: 400, onComplete: () => pulseRing.setVisible(false) });
+                this.tweens.add({ targets: pulseRing, radius: 150, alpha: 0, duration: 300, onComplete: () => pulseRing.setVisible(false) });
+                
                 viruses.getChildren().forEach(v => {
-                    if(Phaser.Math.Distance.Between(player.x, player.y, v.x, v.y) < 250) {
+                    if(Phaser.Math.Distance.Between(player.x, player.y, v.x, v.y) < 150) {
                         let ang = Phaser.Math.Angle.Between(player.x, player.y, v.x, v.y);
-                        v.body.setVelocity(Math.cos(ang)*1200, Math.sin(ang)*1200);
+                        v.body.setVelocity(Math.cos(ang)*800, Math.sin(ang)*800);
                         v.setData('st', true);
-                        this.time.delayedCall(800, () => { if(v.active) v.setData('st', false); });
+                        this.time.delayedCall(600, () => { if(v.active) v.setData('st', false); });
                     }
                 });
             }
@@ -168,10 +171,24 @@
                 ammoBars[i].setPosition(player.x - 14 + (i*14), player.y - 25);
                 ammoBars[i].visible = (i < playerAmmo);
             }
-            balas.getChildren().forEach(b => { if(b.getData('r')) { b.getData('r').x = b.x; b.getData('r').y = b.y; } });
+
+            balas.getChildren().forEach(b => { 
+                if(b.getData('r')) { b.getData('r').x = b.x; b.getData('r').y = b.y; }
+                if(Phaser.Math.Distance.Between(b.x, b.y, b.getData('startX'), b.getData('startY')) > 300) {
+                    if(b.getData('r')) b.getData('r').destroy();
+                    b.destroy();
+                }
+            });
+
             viruses.getChildren().forEach(v => {
-                if(!v.getData('st')) this.physics.moveToObject(v, player, 140);
-                if(v.getData('visual')) { v.getData('visual').x = v.x; v.getData('visual').y = v.y; }
+                // CAMBIO: Velocidad de movimiento reducida a 80
+                if(!v.getData('st')) this.physics.moveToObject(v, player, 80);
+                if(v.getData('visual')) { 
+                    v.getData('visual').x = v.x - 12; // Ajuste de offset por cómo se dibujan los triángulos
+                    v.getData('visual').y = v.y - 12; 
+                    v.getData('hpBar').x = v.x;
+                    v.getData('hpBar').y = v.y - 20;
+                }
             });
         }
     </script>
