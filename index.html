@@ -2,17 +2,17 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>CORE ARENA - Stable Epic Version</title>
+    <title>CORE ARENA - RECOVERY MODE</title>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-arcade-physics.min.js"></script>
     <style>
         body { margin: 0; background-color: #020205; display: flex; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
-        #game-ui { font-family: 'Courier New', monospace; text-align: center; position: absolute; top: 10px; width: 100%; z-index: 100; pointer-events: none; display: none; }
+        #game-ui { font-family: 'Courier New', monospace; position: absolute; top: 10px; width: 100%; z-index: 100; text-align: center; pointer-events: none; display: none; }
     </style>
 </head>
 <body>
     <div id="game-ui">
-        <h1 style="margin:0; color:#00ff41; text-shadow: 0 0 15px #00ff41;">[ CORE ARENA ]</h1>
-        <p style="color:#00e5ff; font-weight: bold; font-size: 1.2em;">BIT_INTEGRITY: <span id="hpText">60</span>% | <span id="super-hint" style="color:#ff00ff; display:none; text-shadow: 0 0 20px #ff00ff;">> SINGULARITY_READY [SPACE] <</span></p>
+        <h1 style="margin:0; color:#00ff41; text-shadow: 0 0 10px #00ff41;">[ CORE ARENA ]</h1>
+        <p style="color:#00e5ff; font-weight: bold;">INTEGRITY: <span id="hpText">60</span>% | <span id="super-hint" style="color:#ff00ff; display:none;">READY [SPACE]</span></p>
     </div>
 
     <script>
@@ -20,25 +20,13 @@
             constructor() { super('MenuScene'); }
             create() {
                 const { width, height } = this.scale;
-                this.gfx = this.add.graphics().setDepth(10);
-                this.add.text(width/2, height/2 - 60, 'CORE ARENA', { fontSize: '90px', color: '#00ff41', fontFamily: 'Courier New', fontStyle: 'bold' }).setOrigin(0.5).setShadow(0, 0, '#00ff41', 20);
-                let btn = this.add.rectangle(width/2, height/2 + 60, 350, 70, 0x00ff41, 0.1).setStrokeStyle(3, 0x00ff41).setInteractive({useHandCursor:true});
-                let btnText = this.add.text(width/2, height/2 + 60, 'INITIALIZE_SYSTEM', { fontSize: '26px', color: '#00ff41', fontFamily: 'Courier New', fontStyle: 'bold' }).setOrigin(0.5);
+                this.add.text(width/2, height/2 - 40, 'CORE ARENA', { fontSize: '60px', color: '#00ff41', fontFamily: 'Courier New' }).setOrigin(0.5);
+                let btn = this.add.rectangle(width/2, height/2 + 50, 250, 50, 0x00ff41, 0.2).setStrokeStyle(2, 0x00ff41).setInteractive({useHandCursor:true});
+                this.add.text(width/2, height/2 + 50, 'START_SYSTEM', { fontSize: '20px', color: '#00ff41', fontFamily: 'Courier New' }).setOrigin(0.5);
                 
                 btn.on('pointerdown', () => {
-                    btn.setVisible(false); btnText.setVisible(false);
-                    this.cameras.main.shake(800, 0.04);
-                    this.time.addEvent({
-                        delay: 40, repeat: 20,
-                        callback: () => {
-                            this.gfx.clear();
-                            for(let i=0; i<20; i++) {
-                                this.gfx.fillStyle([0x00ff41, 0xffffff, 0xff003c, 0x00e5ff][Math.floor(Math.random()*4)], 0.7);
-                                this.gfx.fillRect(0, Math.random()*height, width, Math.random()*100);
-                            }
-                        }
-                    });
-                    this.time.delayedCall(1000, () => {
+                    this.cameras.main.shake(500, 0.03);
+                    this.time.delayedCall(600, () => {
                         document.getElementById('game-ui').style.display = 'block';
                         this.scene.start('GameScene');
                     });
@@ -50,65 +38,108 @@
             constructor() { super('GameScene'); }
 
             create() {
-                // Generación de texturas segura (verifica que no existan antes de crearlas)
-                if (!this.textures.exists('cyan_bit')) {
-                    let g = this.make.graphics({x:0, y:0, add:false});
-                    g.fillStyle(0x00e5ff); g.fillRect(0,0,8,8); g.generateTexture('cyan_bit', 8, 8);
-                    g.clear(); g.fillStyle(0xff003c); g.fillRect(0,0,12,12); g.generateTexture('red_bit', 12, 12);
-                    g.clear(); g.fillStyle(0x00ff41); g.fillRect(0,0,10,10); g.generateTexture('green_bit', 10, 10);
-                    g.destroy();
-                }
+                // Dimensiones del mapa
+                this.W = 2000; this.H = 1500;
+                this.CX = 1000; this.CY = 750;
+                this.physics.world.setBounds(0, 0, this.W, this.H);
 
-                // Reinicio de UI
-                document.getElementById('hpText').innerText = "60";
-                document.getElementById('super-hint').style.display = 'none';
+                // Fondo y Rejilla
+                this.add.grid(this.CX, this.CY, 3000, 3000, 64, 64, 0x00e5ff, 0.05);
 
-                this.CX = 1200; this.CY = 900;
-                this.physics.world.setBounds(0, 0, 2400, 1800);
-                this.add.grid(this.CX, this.CY, 3600, 3600, 80, 80, 0x00e5ff, 0.04).setDepth(-1);
-                
-                this.rings = [{ r: 280, g: 0 }, { r: 500, g: 90 }, { r: 750, g: 180 }];
-                this.gfxWalls = this.add.graphics();
-
-                this.playerHP = 60; this.virusHP = 60; this.ammo = 3; this.superCharge = 0;
-                this.gameEnded = false; this.pBullets = []; this.vBullets = [];
-                this.nextAmmo = 0; this.lastVShot = 0;
-
-                // BIT
-                this.player = this.add.rectangle(this.CX + 500, this.CY, 24, 24, 0x00ff41).setDepth(10);
-                this.playerAura = this.add.circle(this.CX + 500, this.CY, 35, 0x00ff41, 0.2).setDepth(9);
+                // Jugador (BIT)
+                this.player = this.add.rectangle(this.CX + 400, this.CY, 24, 24, 0x00ff41);
                 this.physics.add.existing(this.player);
-                
-                this.pHealthBar = this.add.rectangle(0, 0, 50, 6, 0x00ff00).setDepth(20);
-                this.pSuperBar = this.add.rectangle(0, 0, 50, 4, 0xff00ff).setDepth(20);
+                this.player.body.setCollideWorldBounds(true);
 
-                // VIRUS
-                this.virus = this.add.triangle(this.CX, this.CY, 0, 100, 50, 0, 100, 100, 0xff003c).setDepth(5);
-                this.vAura = this.add.circle(this.CX, this.CY, 70, 0xff003c, 0.2).setDepth(4);
-                this.vHealthBar = this.add.rectangle(this.CX, this.CY - 130, 150, 12, 0xff003c).setDepth(6);
+                // Virus (Jefe)
+                this.virus = this.add.triangle(this.CX, this.CY, 0, 80, 40, 0, 80, 80, 0xff003c);
+                this.vHealthBar = this.add.rectangle(this.CX, this.CY - 100, 150, 10, 0xff003c);
 
-                this.cameras.main.setBounds(0, 0, 2400, 1800).setZoom(0.8).startFollow(this.player, true, 0.08, 0.08);
+                // Variables de estado
+                this.playerHP = 60; this.virusHP = 50;
+                this.superCharge = 0; this.ammo = 3;
+                this.pBullets = this.add.group();
+                this.vBullets = this.add.group();
+                this.gameEnded = false;
+
+                // Cámara
+                this.cameras.main.setBounds(0, 0, this.W, this.H).startFollow(this.player, true, 0.1, 0.1);
                 this.keys = this.input.keyboard.addKeys('W,A,S,D,SPACE');
-                this.input.on('pointerdown', (p) => this.fireGlitchBolt(p));
+                
+                // Disparo
+                this.input.on('pointerdown', (p) => this.fire(p));
             }
 
             update(time) {
-                if (this.gameEnded) return;
-                this.drawGlitchWalls();
-
-                this.playerAura.setPosition(this.player.x, this.player.y);
-                this.virus.rotation += 0.01;
+                if(this.gameEnded) return;
 
                 // Movimiento
-                let cursors = this.input.keyboard.createCursorKeys();
                 this.player.body.setVelocity(0);
-                let speed = 480;
-                if (this.keys.A.isDown || cursors.left.isDown) this.player.body.setVelocityX(-speed);
-                else if (this.keys.D.isDown || cursors.right.isDown) this.player.body.setVelocityX(speed);
-                if (this.keys.W.isDown || cursors.up.isDown) this.player.body.setVelocityY(-speed);
-                else if (this.keys.S.isDown || cursors.down.isDown) this.player.body.setVelocityY(speed);
+                if (this.keys.A.isDown) this.player.body.setVelocityX(-400);
+                else if (this.keys.D.isDown) this.player.body.setVelocityX(400);
+                if (this.keys.W.isDown) this.player.body.setVelocityY(-400);
+                else if (this.keys.S.isDown) this.player.body.setVelocityY(400);
 
-                // Colisión Muros
-                let d = Phaser.Math.Distance.Between(this.player.x, this.player.y, this.CX, this.CY);
-                let ang = Phaser.Math.Angle.Between(this.CX, this.CY, this.player.x, this.player.y);
-                let deg = Phaser.Math.Angle.WrapDegrees(Phaser
+                // IA Virus básica (Disparo)
+                if (time % 1500 < 20) {
+                    this.virusFire();
+                }
+
+                // Super
+                if (Phaser.Input.Keyboard.JustDown(this.keys.SPACE) && this.superCharge >= 10) {
+                    this.useSuper();
+                }
+
+                // Limpieza de balas fuera de rango
+                this.pBullets.children.iterate(b => {
+                    if(b && (b.x < 0 || b.x > this.W || b.y < 0 || b.y > this.H)) b.destroy();
+                });
+            }
+
+            fire(p) {
+                if (this.ammo > 0) {
+                    let pWorld = p.positionToCamera(this.cameras.main);
+                    let b = this.add.rectangle(this.player.x, this.player.y, 20, 6, 0x00e5ff);
+                    this.physics.add.existing(b);
+                    let angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, pWorld.x, pWorld.y);
+                    b.setRotation(angle);
+                    this.physics.velocityFromRotation(angle, 600, b.body.velocity);
+                    
+                    // Efecto de estela (Glitch simple)
+                    this.tweens.add({ targets: b, scaleX: 1.5, duration: 200, yoyo: true, repeat: -1 });
+                    
+                    this.pBullets.add(b);
+                    this.physics.add.overlap(b, this.virus, () => {
+                        this.virusHP--;
+                        this.superCharge = Math.min(10, this.superCharge + 1);
+                        if(this.superCharge >= 10) document.getElementById('super-hint').style.display = 'inline';
+                        this.vHealthBar.width = (this.virusHP / 50) * 150;
+                        this.cameras.main.shake(100, 0.005);
+                        b.destroy();
+                        if(this.virusHP <= 0) this.win();
+                    });
+                }
+            }
+
+            virusFire() {
+                let vb = this.add.rectangle(this.CX, this.CY, 15, 15, 0xff003c).setRotation(0.7);
+                this.physics.add.existing(vb);
+                let angle = Phaser.Math.Angle.Between(this.CX, this.CY, this.player.x, this.player.y);
+                this.physics.velocityFromRotation(angle, 350, vb.body.velocity);
+                this.vBullets.add(vb);
+
+                this.physics.add.overlap(vb, this.player, () => {
+                    this.playerHP -= 10;
+                    document.getElementById('hpText').innerText = this.playerHP;
+                    this.cameras.main.shake(200, 0.02);
+                    vb.destroy();
+                    if(this.playerHP <= 0) this.lose();
+                });
+            }
+
+            useSuper() {
+                this.superCharge = 0;
+                document.getElementById('super-hint').style.display = 'none';
+                this.cameras.main.flash(500, 255, 255, 255);
+                
+                let beam = this.add.rectangle(this.player.x, this.player.y, 10, 10, 0xff00ff).setOrigin(0.5);
