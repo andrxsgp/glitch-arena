@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>CORE ARENA - Stable Super</title>
+    <title>CORE ARENA - Damage Numbers</title>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-arcade-physics.min.js"></script>
     <style>
         body { margin: 0; background-color: #050505; color: #00ff41; font-family: 'Courier New', monospace; display: flex; flex-direction: column; align-items: center; }
@@ -63,6 +63,24 @@
             });
         }
 
+        // FUNCIÓN PARA MOSTRAR DAÑO
+        function showDamage(scene, x, y, amount, color) {
+            let txt = scene.add.text(x, y - 20, amount, { 
+                fontFamily: 'Courier New', 
+                fontSize: amount === "-5" ? '28px' : '20px', 
+                fontWeight: 'bold', 
+                color: color 
+            }).setOrigin(0.5);
+
+            scene.tweens.add({
+                targets: txt,
+                y: y - 80,
+                alpha: 0,
+                duration: 800,
+                onComplete: () => txt.destroy()
+            });
+        }
+
         function update(time) {
             if (gameEnded) return;
 
@@ -85,7 +103,7 @@
                 lanzarSuper(this);
             }
 
-            // Colisiones matemáticas estables
+            // Colisiones muros
             let dP = Phaser.Math.Distance.Between(player.x, player.y, CX, CY);
             let aP = Phaser.Math.Angle.WrapDegrees(Phaser.Math.RadToDeg(Phaser.Math.Angle.Between(CX, CY, player.x, player.y)));
             rings.forEach(r => {
@@ -110,12 +128,13 @@
             }
             if(virus) virus.rotation += 0.04;
 
-            // Procesar Proyectiles
+            // Balas Jugador e impacto
             pBullets.forEach((b, i) => {
                 b.x += b.vx; b.y += b.vy;
                 if (virus && Phaser.Math.Distance.Between(b.x, b.y, CX, CY) < 40) {
                     b.destroy(); pBullets.splice(i, 1);
                     virusHP--;
+                    showDamage(this, CX, CY, "-1", "#00e5ff"); // Daño visual
                     vHealthBar.width = (virusHP / 50) * 60;
                     if (superCharge < 10) {
                         superCharge++;
@@ -135,7 +154,6 @@
                 }
             });
 
-            // UI Seguir Jugador
             pHealthBar.setPosition(player.x, player.y - 30).width = (playerHP/60)*40;
             superBar.setPosition(player.x, player.y - 25).width = (superCharge/10)*40;
             for(let i=0; i<3; i++) {
@@ -148,43 +166,25 @@
         function lanzarSuper(scene) {
             superCharge = 0;
             document.getElementById('super-hint').style.display = 'none';
-            
-            // Onda expansiva visual
             let onda = scene.add.circle(player.x, player.y, 10, 0xff00ff, 0.4).setDepth(1);
             
-            // DAÑO INMEDIATO AL ACTIVAR (Evita el lag del bucle update)
             if (virus && Phaser.Math.Distance.Between(player.x, player.y, CX, CY) < 500) {
                 virusHP -= 5;
+                showDamage(scene, CX, CY, "-5", "#ff00ff"); // Daño visual del súper
                 vHealthBar.width = Math.max(0, (virusHP / 50) * 60);
                 scene.cameras.main.shake(200, 0.02);
                 if (virusHP <= 0) ganar();
             }
 
-            // Borrar balas enemigas cercanas
-            vBullets.forEach((vb, k) => {
-                if (Phaser.Math.Distance.Between(player.x, player.y, vb.x, vb.y) < 400) {
-                    vb.destroy();
-                }
-            });
+            vBullets.forEach((vb) => { if (Phaser.Math.Distance.Between(player.x, player.y, vb.x, vb.y) < 400) vb.destroy(); });
             vBullets = vBullets.filter(vb => vb.active);
 
-            // Animación de expansión
-            scene.tweens.add({
-                targets: onda,
-                radius: 500,
-                alpha: 0,
-                duration: 500,
-                onComplete: () => onda.destroy()
-            });
+            scene.tweens.add({ targets: onda, radius: 500, alpha: 0, duration: 500, onComplete: () => onda.destroy() });
         }
 
         function ganar() {
             gameEnded = true;
-            if (virus) {
-                virus.destroy();
-                vHealthBar.destroy();
-                vHealthBG.destroy();
-            }
+            if (virus) { virus.destroy(); vHealthBar.destroy(); vHealthBG.destroy(); }
             document.getElementById('super-hint').innerText = "¡NÚCLEO ELIMINADO! VICTORIA";
             document.getElementById('super-hint').style.display = 'block';
         }
