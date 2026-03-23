@@ -2,11 +2,11 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>CORE ARENA - Death Effects</title>
+    <title>CORE ARENA - Fixed Walls & Death FX</title>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-arcade-physics.min.js"></script>
     <style>
-        body { margin: 0; background-color: #050505; color: #00ff41; font-family: 'Courier New', monospace; display: flex; flex-direction: center; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
-        canvas { border: 2px solid #00e5ff; box-shadow: 0 0 30px #ff003c; }
+        body { margin: 0; background-color: #050505; color: #00ff41; font-family: 'Courier New', monospace; display: flex; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
+        canvas { border: 2px solid #00e5ff; box-shadow: 0 0 30px #00e5ff; }
         .ui { text-align: center; padding: 10px; pointer-events: none; position: absolute; top: 10px; width: 100%; z-index: 100; }
         #super-hint { color: #ff00ff; font-weight: bold; display: none; text-shadow: 0 0 20px #ff00ff; font-size: 28px; }
     </style>
@@ -70,27 +70,6 @@
             scene.tweens.add({ targets: txt, y: y - 120, alpha: 0, duration: 1000, onComplete: () => txt.destroy() });
         }
 
-        function deathExplosion(scene, x, y, color) {
-            for(let i=0; i<15; i++) {
-                let p = scene.add.rectangle(x, y, 12, 12, color);
-                scene.physics.add.existing(p);
-                p.body.setVelocity(Phaser.Math.Between(-300, 300), Phaser.Math.Between(-300, 300));
-                scene.tweens.add({ targets: p, angle: 360, alpha: 0, duration: 1000, onComplete: () => p.destroy() });
-            }
-        }
-
-        function glitchEffect(scene, target) {
-            scene.time.addEvent({
-                delay: 50,
-                repeat: 10,
-                callback: () => {
-                    target.x += Phaser.Math.Between(-15, 15);
-                    target.fillColor = (Math.random() > 0.5) ? 0xffffff : 0x00ff41;
-                    target.scaleX = Math.random() * 2;
-                }
-            });
-        }
-
         function update(time) {
             if (gameEnded) return;
 
@@ -101,12 +80,30 @@
                 gfx.strokePath();
             });
 
+            // Movimiento
             let cursors = this.input.keyboard.createCursorKeys();
             player.body.setVelocity(0);
             if (keys.A.isDown || cursors.left.isDown) player.body.setVelocityX(-350);
             else if (keys.D.isDown || cursors.right.isDown) player.body.setVelocityX(350);
             if (keys.W.isDown || cursors.up.isDown) player.body.setVelocityY(-350);
             else if (keys.S.isDown || cursors.down.isDown) player.body.setVelocityY(350);
+
+            // COLISIÓN REFORZADA
+            let distToCenter = Phaser.Math.Distance.Between(player.x, player.y, CX, CY);
+            let angleToCenter = Phaser.Math.Angle.Between(CX, CY, player.x, player.y);
+            let degAngle = Phaser.Math.Angle.WrapDegrees(Phaser.Math.RadToDeg(angleToCenter));
+
+            rings.forEach(r => {
+                if (Math.abs(distToCenter - r.r) < 12) {
+                    let diff = Math.abs(degAngle - r.g);
+                    if (diff > 180) diff = 360 - diff;
+                    if (diff > 38) { // Si choca con el muro del anillo
+                        let targetR = (distToCenter > r.r) ? r.r + 13 : r.r - 13;
+                        player.x = CX + Math.cos(angleToCenter) * targetR;
+                        player.y = CY + Math.sin(angleToCenter) * targetR;
+                    }
+                }
+            });
 
             if (Phaser.Input.Keyboard.JustDown(keys.SPACE) && superCharge >= 10) lanzarSuper(this);
 
@@ -118,6 +115,7 @@
                 vBullets.push(vb);
             }
 
+            // Balas y Daño
             pBullets.forEach((b, i) => {
                 b.x += b.vx; b.y += b.vy;
                 if (virus && Phaser.Math.Distance.Between(b.x, b.y, CX, CY) < 40) {
@@ -137,10 +135,12 @@
                     showDamage(this, player.x, player.y, "-10", "#ff003c", '45px');
                     document.getElementById('hpText').innerText = Math.floor(playerHP);
                     vb.destroy(); vBullets.splice(j, 1);
+                    player.setAlpha(0.5); this.time.delayedCall(100, () => player.setAlpha(1));
                     if (playerHP <= 0) morirBit(this);
                 }
             });
 
+            // UI
             pHealthBar.setPosition(player.x, player.y - 30).width = (playerHP/60)*40;
             superBar.setPosition(player.x, player.y - 25).width = (superCharge/10)*40;
             for(let i=0; i<3; i++) { ammoBars[i].setPosition(player.x-15+(i*15), player.y-18); ammoBars[i].visible=(i<ammo); }
@@ -149,16 +149,28 @@
 
         function morirVirus(scene) {
             gameEnded = true;
-            deathExplosion(scene, CX, CY, 0xff003c);
+            for(let i=0; i<20; i++) {
+                let p = scene.add.rectangle(CX, CY, 10, 10, 0xff003c);
+                scene.physics.add.existing(p);
+                p.body.setVelocity(Phaser.Math.Between(-400, 400), Phaser.Math.Between(-400, 400));
+                scene.tweens.add({ targets: p, alpha: 0, duration: 1500, onComplete: () => p.destroy() });
+            }
             virus.destroy(); vHealthBar.destroy(); vHealthBG.destroy();
-            document.getElementById('super-hint').innerText = "¡NÚCLEO ELIMINADO!";
+            document.getElementById('super-hint').innerText = "¡SISTEMA PURGADO!";
             document.getElementById('super-hint').style.display = 'block';
             scene.cameras.main.flash(500, 255, 0, 60);
         }
 
         function morirBit(scene) {
             gameEnded = true;
-            glitchEffect(scene, player);
+            scene.time.addEvent({
+                delay: 40, repeat: 15,
+                callback: () => {
+                    player.x += Phaser.Math.Between(-20, 20);
+                    player.fillColor = (Math.random() > 0.5) ? 0xffffff : 0xff003c;
+                    player.scaleX = Math.random() * 3;
+                }
+            });
             scene.cameras.main.shake(500, 0.05);
             scene.time.delayedCall(1000, () => location.reload());
         }
