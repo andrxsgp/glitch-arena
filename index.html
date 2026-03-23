@@ -2,20 +2,20 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>CORE ARENA - The Final Boss</title>
+    <title>CORE ARENA - Boss Fixed</title>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-arcade-physics.min.js"></script>
     <style>
         body { margin: 0; background-color: #050505; color: #00ff41; font-family: 'Courier New', monospace; display: flex; flex-direction: column; align-items: center; }
         canvas { border: 2px solid #00e5ff; margin-top: 10px; }
         .ui { text-align: center; padding: 10px; pointer-events: none; position: absolute; top: 10px; width: 100%; }
-        #msg { font-size: 32px; font-weight: bold; color: #00e5ff; display: none; margin-top: 20px; }
+        #msg { font-size: 32px; font-weight: bold; color: #ff00ff; display: none; text-shadow: 0 0 10px #ff00ff; }
     </style>
 </head>
 <body>
     <div class="ui">
-        <h1 style="margin:0;">[ CORE ARENA: JEFE FINAL ]</h1>
+        <h1 style="margin:0;">[ CORE ARENA ]</h1>
         <p>HP BIT: <span id="hpText">60</span> | MUNICIÓN: <span id="ammoCount">3</span></p>
-        <div id="msg">¡SISTEMA PURGADO! VICTORIA</div>
+        <div id="msg">¡NÚCLEO ELIMINADO! VICTORIA</div>
     </div>
 
     <script>
@@ -27,7 +27,7 @@
 
         const game = new Phaser.Game(config);
         const CX = 800, CY = 600;
-        let player, virus, gfx, vHealthBar, pHealthBar, ammoBars = [];
+        let player, virus, gfx, vHealthBar, vHealthBG, pHealthBar, ammoBars = [];
         let pBullets = [], vBullets = [];
         let playerHP = 60, virusHP = 50, ammo = 3, nextAmmo = 0, lastVShot = 0;
         let gameEnded = false;
@@ -37,19 +37,20 @@
             this.physics.world.setBounds(0, 0, 1600, 1200);
             gfx = this.add.graphics();
             
-            player = this.add.rectangle(CX + 300, CY, 24, 24, 0x00ff41).setDepth(10);
+            // Jugador
+            player = this.add.rectangle(CX + 350, CY, 24, 24, 0x00ff41).setDepth(10);
             this.physics.add.existing(player);
             
             // UI Bit
             pHealthBar = this.add.rectangle(0, 0, 40, 5, 0x00ff00).setDepth(20);
             for(let i=0; i<3; i++) ammoBars[i] = this.add.rectangle(0, 0, 10, 4, 0x00e5ff).setDepth(20);
 
-            // Virus (Jefe)
+            // Jefe (Virus)
             virus = this.add.triangle(CX, CY, 0, 60, 30, 0, 60, 60, 0xff003c).setDepth(5);
             
-            // Barra de vida del Jefe (Fija en cámara)
-            vHealthBar = this.add.rectangle(500, 80, 600, 20, 0xff0000).setScrollFactor(0).setDepth(100);
-            this.add.text(200, 60, "NÚCLEO INFECTADO", {fontSize:'16px', color:'#ff003c'}).setScrollFactor(0).setDepth(100);
+            // Barra de vida del Jefe (Fondo y salud)
+            vHealthBG = this.add.rectangle(CX, CY - 50, 60, 8, 0x330000).setDepth(4);
+            vHealthBar = this.add.rectangle(CX, CY - 50, 60, 8, 0xff0000).setDepth(5);
 
             this.cameras.main.setBounds(0, 0, 1600, 1200).setZoom(0.8).startFollow(player, true, 0.1, 0.1);
 
@@ -86,7 +87,7 @@
             if (keys.W.isDown || cursors.up.isDown) player.body.setVelocityY(-350);
             else if (keys.S.isDown || cursors.down.isDown) player.body.setVelocityY(350);
 
-            // Colisión con Muros
+            // Muros
             let dP = Phaser.Math.Distance.Between(player.x, player.y, CX, CY);
             let aP = Phaser.Math.Angle.WrapDegrees(Phaser.Math.RadToDeg(Phaser.Math.Angle.Between(CX, CY, player.x, player.y)));
             rings.forEach(r => {
@@ -102,7 +103,7 @@
                 }
             });
 
-            // Disparo del Jefe (Más rápido ahora)
+            // Disparo del Jefe
             if (virus && time > lastVShot + 1200) {
                 lastVShot = time;
                 let vb = this.add.circle(CX, CY, 8, 0xff003c);
@@ -111,9 +112,9 @@
                 vb.vy = Math.sin(ang) * 8;
                 vBullets.push(vb);
             }
-            if(virus) virus.rotation += 0.05;
+            if(virus) virus.rotation += 0.04;
 
-            // Procesar Balas Jugador (Daño al Jefe)
+            // Balas Jugador
             for (let i = pBullets.length - 1; i >= 0; i--) {
                 let b = pBullets[i];
                 b.x += b.vx; b.y += b.vy;
@@ -122,12 +123,14 @@
                     b.destroy();
                     pBullets.splice(i, 1);
                     virusHP--;
-                    vHealthBar.width = (virusHP / 50) * 600; // Actualizar barra de jefe
+                    // Actualizar barra de vida (siempre 60px de base)
+                    vHealthBar.width = Math.max(0, (virusHP / 50) * 60);
                     
                     if (virusHP <= 0) {
                         virus.destroy();
-                        virus = null;
                         vHealthBar.destroy();
+                        vHealthBG.destroy();
+                        virus = null;
                         gameEnded = true;
                         document.getElementById('msg').style.display = 'block';
                     }
@@ -138,7 +141,7 @@
                 }
             }
 
-            // Procesar Balas Virus
+            // Balas Virus
             for (let j = vBullets.length - 1; j >= 0; j--) {
                 let vb = vBullets[j];
                 vb.x += vb.vx; vb.y += vb.vy;
