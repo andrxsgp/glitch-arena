@@ -2,19 +2,19 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>CORE ARENA - Big Damage Numbers</title>
+    <title>CORE ARENA - Epic Damage</title>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-arcade-physics.min.js"></script>
     <style>
         body { margin: 0; background-color: #050505; color: #00ff41; font-family: 'Courier New', monospace; display: flex; flex-direction: column; align-items: center; }
-        canvas { border: 2px solid #00e5ff; margin-top: 10px; box-shadow: 0 0 20px #00e5ff; }
+        canvas { border: 2px solid #00e5ff; margin-top: 10px; box-shadow: 0 0 30px #ff00ff; }
         .ui { text-align: center; padding: 10px; pointer-events: none; position: absolute; top: 10px; width: 100%; z-index: 100; }
-        #super-hint { color: #ff00ff; font-weight: bold; display: none; text-shadow: 0 0 15px #ff00ff; font-size: 24px; }
+        #super-hint { color: #ff00ff; font-weight: bold; display: none; text-shadow: 0 0 20px #ff00ff; font-size: 28px; }
     </style>
 </head>
 <body>
     <div class="ui">
         <h1 style="margin:0;">[ CORE ARENA ]</h1>
-        <p>BIT HP: <span id="hpText">60</span> | <span id="super-hint">¡SÚPER LISTO! [ESPACIO]</span></p>
+        <p>BIT HP: <span id="hpText">60</span> | <span id="super-hint">¡SÚPER CARGADO! [ESPACIO]</span></p>
     </div>
 
     <script>
@@ -63,27 +63,33 @@
             });
         }
 
-        // SISTEMA DE DAÑO GIGANTE
+        // TEXTO DE DAÑO ÉPICO
         function showDamage(scene, x, y, amount, color, isSuper = false) {
-            let size = isSuper ? '64px' : '32px'; // Tamaño mucho más grande
-            let txt = scene.add.text(x, y - 40, amount, { 
-                fontFamily: 'Arial Black', // Fuente más gruesa
-                fontSize: size, 
-                color: color,
-                stroke: '#000000',
-                strokeThickness: 6
-            }).setOrigin(0.5).setDepth(100).setScale(0);
+            let fontSize = isSuper ? '80px' : '40px'; 
+            let duration = isSuper ? 1500 : 800; // Dura más si es Súper
 
-            // Animación de "Pop" y subida
+            let txt = scene.add.text(x, y - 50, amount, { 
+                fontFamily: 'Arial Black', 
+                fontSize: fontSize, 
+                color: color,
+                stroke: '#ffffff',
+                strokeThickness: isSuper ? 4 : 2,
+                shadow: { offsetX: 0, offsetY: 0, color: color, blur: 15, fill: true }
+            }).setOrigin(0.5).setDepth(100);
+
+            // Animación de subida lenta y desaparición
             scene.tweens.add({
                 targets: txt,
-                scale: 1,
-                y: y - 120,
+                y: y - 150,
                 alpha: 0,
-                duration: 600,
-                ease: 'Back.easeOut',
+                scale: isSuper ? 1.2 : 1,
+                duration: duration,
+                ease: 'Cubic.out',
                 onComplete: () => txt.destroy()
             });
+
+            // Si es súper, que vibre la pantalla más tiempo
+            if(isSuper) scene.cameras.main.shake(300, 0.04);
         }
 
         function update(time) {
@@ -137,7 +143,7 @@
                 if (virus && Phaser.Math.Distance.Between(b.x, b.y, CX, CY) < 40) {
                     b.destroy(); pBullets.splice(i, 1);
                     virusHP--;
-                    showDamage(this, CX + (Math.random()*40-20), CY, "-1", "#00e5ff", false);
+                    showDamage(this, CX + (Math.random()*60-30), CY, "-1", "#00e5ff", false);
                     vHealthBar.width = (virusHP / 50) * 60;
                     if (superCharge < 10) {
                         superCharge++;
@@ -171,24 +177,23 @@
             document.getElementById('super-hint').style.display = 'none';
             let onda = scene.add.circle(player.x, player.y, 10, 0xff00ff, 0.4).setDepth(1);
             
-            if (virus && Phaser.Math.Distance.Between(player.x, player.y, CX, CY) < 550) {
+            if (virus && Phaser.Math.Distance.Between(player.x, player.y, CX, CY) < 600) {
                 virusHP -= 5;
-                showDamage(scene, CX, CY - 20, "-5", "#ff00ff", true); // Daño de super GIGANTE
+                showDamage(scene, CX, CY, "-5", "#ff00ff", true); 
                 vHealthBar.width = Math.max(0, (virusHP / 50) * 60);
-                scene.cameras.main.shake(300, 0.03);
                 if (virusHP <= 0) ganar();
             }
 
-            vBullets.forEach((vb) => { if (Phaser.Math.Distance.Between(player.x, player.y, vb.x, vb.y) < 450) vb.destroy(); });
+            vBullets.forEach((vb) => { if (Phaser.Math.Distance.Between(player.x, player.y, vb.x, vb.y) < 500) vb.destroy(); });
             vBullets = vBullets.filter(vb => vb.active);
 
-            scene.tweens.add({ targets: onda, radius: 550, alpha: 0, duration: 500, onComplete: () => onda.destroy() });
+            scene.tweens.add({ targets: onda, radius: 600, alpha: 0, duration: 600, onComplete: () => onda.destroy() });
         }
 
         function ganar() {
             gameEnded = true;
             if (virus) { virus.destroy(); vHealthBar.destroy(); vHealthBG.destroy(); }
-            document.getElementById('super-hint').innerText = "¡NÚCLEO ELIMINADO! VICTORIA";
+            document.getElementById('super-hint').innerText = "¡SISTEMA PURGADO! VICTORIA";
             document.getElementById('super-hint').style.display = 'block';
         }
     </script>
