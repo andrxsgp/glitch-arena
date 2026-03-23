@@ -2,20 +2,19 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>CORE ARENA - Boss Fixed</title>
+    <title>CORE ARENA - Super Charged Boss</title>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-arcade-physics.min.js"></script>
     <style>
         body { margin: 0; background-color: #050505; color: #00ff41; font-family: 'Courier New', monospace; display: flex; flex-direction: column; align-items: center; }
         canvas { border: 2px solid #00e5ff; margin-top: 10px; }
         .ui { text-align: center; padding: 10px; pointer-events: none; position: absolute; top: 10px; width: 100%; }
-        #msg { font-size: 32px; font-weight: bold; color: #ff00ff; display: none; text-shadow: 0 0 10px #ff00ff; }
+        #super-text { color: #ff00ff; font-weight: bold; display: none; text-shadow: 0 0 10px #ff00ff; }
     </style>
 </head>
 <body>
     <div class="ui">
         <h1 style="margin:0;">[ CORE ARENA ]</h1>
-        <p>HP BIT: <span id="hpText">60</span> | MUNICIÓN: <span id="ammoCount">3</span></p>
-        <div id="msg">¡NÚCLEO ELIMINADO! VICTORIA</div>
+        <p>BIT HP: <span id="hpText">60</span> | <span id="super-text">¡SÚPER ACTIVO!</span></p>
     </div>
 
     <script>
@@ -27,38 +26,38 @@
 
         const game = new Phaser.Game(config);
         const CX = 800, CY = 600;
-        let player, virus, gfx, vHealthBar, vHealthBG, pHealthBar, ammoBars = [];
-        let pBullets = [], vBullets = [];
+        let player, virus, gfx, vHealthBar, vHealthBG, pHealthBar, superBar;
+        let pBullets = [], vBullets = [], ammoBars = [];
         let playerHP = 60, virusHP = 50, ammo = 3, nextAmmo = 0, lastVShot = 0;
-        let gameEnded = false;
+        let superCharge = 0, isSuper = false, gameEnded = false;
         const rings = [{ r: 160, g: 0 }, { r: 330, g: 90 }, { r: 500, g: 180 }];
 
         function create() {
             this.physics.world.setBounds(0, 0, 1600, 1200);
             gfx = this.add.graphics();
             
-            // Jugador
             player = this.add.rectangle(CX + 350, CY, 24, 24, 0x00ff41).setDepth(10);
             this.physics.add.existing(player);
             
-            // UI Bit
+            // Barras de Bit
             pHealthBar = this.add.rectangle(0, 0, 40, 5, 0x00ff00).setDepth(20);
+            superBar = this.add.rectangle(0, 0, 40, 3, 0xff00ff).setDepth(20);
             for(let i=0; i<3; i++) ammoBars[i] = this.add.rectangle(0, 0, 10, 4, 0x00e5ff).setDepth(20);
 
-            // Jefe (Virus)
+            // Jefe
             virus = this.add.triangle(CX, CY, 0, 60, 30, 0, 60, 60, 0xff003c).setDepth(5);
-            
-            // Barra de vida del Jefe (Fondo y salud)
             vHealthBG = this.add.rectangle(CX, CY - 50, 60, 8, 0x330000).setDepth(4);
             vHealthBar = this.add.rectangle(CX, CY - 50, 60, 8, 0xff0000).setDepth(5);
 
             this.cameras.main.setBounds(0, 0, 1600, 1200).setZoom(0.8).startFollow(player, true, 0.1, 0.1);
 
             this.input.on('pointerdown', (pointer) => {
-                if (ammo > 0 && !gameEnded) {
+                if (gameEnded) return;
+                const fireLimit = isSuper ? 1 : 3; // Dispara más rápido en Súper
+                if (ammo > 0) {
                     ammo--;
                     let pWorld = pointer.positionToCamera(this.cameras.main);
-                    let b = this.add.circle(player.x, player.y, 5, 0x00e5ff);
+                    let b = this.add.circle(player.x, player.y, 5, isSuper ? 0xff00ff : 0x00e5ff);
                     let ang = Phaser.Math.Angle.Between(player.x, player.y, pWorld.x, pWorld.y);
                     b.vx = Math.cos(ang) * 18;
                     b.vy = Math.sin(ang) * 18;
@@ -82,10 +81,11 @@
             let cursors = this.input.keyboard.createCursorKeys();
             let keys = this.input.keyboard.addKeys('W,A,S,D');
             player.body.setVelocity(0);
-            if (keys.A.isDown || cursors.left.isDown) player.body.setVelocityX(-350);
-            else if (keys.D.isDown || cursors.right.isDown) player.body.setVelocityX(350);
-            if (keys.W.isDown || cursors.up.isDown) player.body.setVelocityY(-350);
-            else if (keys.S.isDown || cursors.down.isDown) player.body.setVelocityY(350);
+            const speed = isSuper ? 450 : 350;
+            if (keys.A.isDown || cursors.left.isDown) player.body.setVelocityX(-speed);
+            else if (keys.D.isDown || cursors.right.isDown) player.body.setVelocityX(speed);
+            if (keys.W.isDown || cursors.up.isDown) player.body.setVelocityY(-speed);
+            else if (keys.S.isDown || cursors.down.isDown) player.body.setVelocityY(speed);
 
             // Muros
             let dP = Phaser.Math.Distance.Between(player.x, player.y, CX, CY);
@@ -103,7 +103,7 @@
                 }
             });
 
-            // Disparo del Jefe
+            // IA Jefe
             if (virus && time > lastVShot + 1200) {
                 lastVShot = time;
                 let vb = this.add.circle(CX, CY, 8, 0xff003c);
@@ -112,9 +112,8 @@
                 vb.vy = Math.sin(ang) * 8;
                 vBullets.push(vb);
             }
-            if(virus) virus.rotation += 0.04;
 
-            // Balas Jugador
+            // Balas Jugador e Impactos
             for (let i = pBullets.length - 1; i >= 0; i--) {
                 let b = pBullets[i];
                 b.x += b.vx; b.y += b.vy;
@@ -123,16 +122,19 @@
                     b.destroy();
                     pBullets.splice(i, 1);
                     virusHP--;
-                    // Actualizar barra de vida (siempre 60px de base)
                     vHealthBar.width = Math.max(0, (virusHP / 50) * 60);
                     
+                    // CARGAR SÚPER
+                    if (!isSuper) {
+                        superCharge += 1;
+                        if (superCharge >= 10) activateSuper();
+                    }
+
                     if (virusHP <= 0) {
-                        virus.destroy();
-                        vHealthBar.destroy();
-                        vHealthBG.destroy();
-                        virus = null;
+                        virus.destroy(); vHealthBar.destroy(); vHealthBG.destroy();
                         gameEnded = true;
-                        document.getElementById('msg').style.display = 'block';
+                        document.getElementById('super-text').innerText = "VICTORIA: SISTEMA PURGADO";
+                        document.getElementById('super-text').style.display = "block";
                     }
                     continue;
                 }
@@ -146,27 +148,36 @@
                 let vb = vBullets[j];
                 vb.x += vb.vx; vb.y += vb.vy;
                 if (Phaser.Math.Distance.Between(vb.x, vb.y, player.x, player.y) < 22) {
-                    playerHP -= 10;
+                    playerHP -= isSuper ? 2 : 10; // Menos daño en Súper
                     document.getElementById('hpText').innerText = Math.floor(playerHP);
-                    vb.destroy();
-                    vBullets.splice(j, 1);
+                    vb.destroy(); vBullets.splice(j, 1);
                     if (playerHP <= 0) location.reload();
                     continue;
                 }
-                if (Phaser.Math.Distance.Between(vb.x, vb.y, CX, CY) > 1200) {
-                    vb.destroy(); vBullets.splice(j, 1);
-                }
             }
 
-            // UI Bit
+            // UI Dinámica
             pHealthBar.setPosition(player.x, player.y - 30).width = (playerHP/60)*40;
-            document.getElementById('ammoCount').innerText = ammo;
+            superBar.setPosition(player.x, player.y - 25).width = (superCharge/10)*40;
             for(let i=0; i<3; i++) {
-                ammoBars[i].setPosition(player.x - 15 + (i*15), player.y - 22);
+                ammoBars[i].setPosition(player.x - 15 + (i*15), player.y - 18);
                 ammoBars[i].visible = (i < ammo);
             }
 
-            if (time > nextAmmo && ammo < 3) { ammo++; nextAmmo = time + 1000; }
+            const ammoSpeed = isSuper ? 200 : 1000;
+            if (time > nextAmmo && ammo < 3) { ammo++; nextAmmo = time + ammoSpeed; }
+        }
+
+        function activateSuper() {
+            isSuper = true;
+            player.setFillStyle(0xff00ff);
+            document.getElementById('super-text').style.display = 'inline';
+            game.scene.scenes[0].time.delayedCall(5000, () => {
+                isSuper = false;
+                superCharge = 0;
+                player.setFillStyle(0x00ff41);
+                document.getElementById('super-text').style.display = 'none';
+            });
         }
     </script>
 </body>
