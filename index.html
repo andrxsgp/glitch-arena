@@ -2,18 +2,20 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>CORE ARENA - Fixed Interface</title>
+    <title>CORE ARENA - Super Fixed</title>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-arcade-physics.min.js"></script>
     <style>
         body { margin: 0; background-color: #050505; color: #00ff41; font-family: 'Courier New', monospace; display: flex; flex-direction: column; align-items: center; }
         canvas { border: 2px solid #00e5ff; margin-top: 10px; }
-        .ui { text-align: center; padding: 10px; pointer-events: none; position: absolute; top: 10px; }
+        .ui { text-align: center; padding: 10px; pointer-events: none; position: absolute; top: 10px; width: 100%; }
+        #super-alert { color: #ff00ff; font-weight: bold; display: none; }
     </style>
 </head>
 <body>
     <div class="ui">
         <h1 style="margin:0;">[ CORE ARENA ]</h1>
-        <p>Kills: <span id="kText">0</span> | HP: <span id="hpText">60</span></p>
+        <p>Súper: <span id="sCount">0</span>/5 | HP: <span id="hpText">60</span></p>
+        <div id="super-alert">¡SÚPER CARGADO!</div>
     </div>
 
     <script>
@@ -34,15 +36,12 @@
             this.physics.world.setBounds(0, 0, 1600, 1200);
             gfx = this.add.graphics();
             
-            // Jugador
             player = this.add.rectangle(CX + 300, CY, 24, 24, 0x00ff41).setDepth(10);
             this.physics.add.existing(player);
             
-            // UI del Jugador (Barras)
             pHealthBar = this.add.rectangle(0, 0, 40, 5, 0x00ff00).setDepth(20);
             for(let i=0; i<3; i++) ammoBars[i] = this.add.rectangle(0, 0, 10, 4, 0x00e5ff).setDepth(20);
 
-            // Virus y su barra de vida
             spawnVirus(this);
 
             this.cameras.main.setBounds(0, 0, 1600, 1200).setZoom(0.8).startFollow(player, true, 0.1, 0.1);
@@ -53,8 +52,8 @@
                     let pWorld = pointer.positionToCamera(this.cameras.main);
                     let b = this.add.circle(player.x, player.y, 5, 0x00e5ff);
                     let ang = Phaser.Math.Angle.Between(player.x, player.y, pWorld.x, pWorld.y);
-                    b.vx = Math.cos(ang) * 15;
-                    b.vy = Math.sin(ang) * 15;
+                    b.vx = Math.cos(ang) * 16;
+                    b.vy = Math.sin(ang) * 16;
                     pBullets.push(b);
                 }
             });
@@ -63,9 +62,8 @@
         function spawnVirus(scene) {
             if (virus) virus.destroy();
             if (vHealthBar) vHealthBar.destroy();
-
             virus = scene.add.triangle(CX, CY, 0, 40, 20, 0, 40, 40, 0xff003c);
-            virus.hp = 3; // El virus ahora tiene vida
+            virus.hp = 3;
             vHealthBar = scene.add.rectangle(CX, CY - 40, 50, 6, 0xff0000);
         }
 
@@ -78,7 +76,6 @@
                 gfx.strokePath();
             });
 
-            // Controles
             let cursors = this.input.keyboard.createCursorKeys();
             let keys = this.input.keyboard.addKeys('W,A,S,D');
             player.body.setVelocity(0);
@@ -87,7 +84,6 @@
             if (keys.W.isDown || cursors.up.isDown) player.body.setVelocityY(-350);
             else if (keys.S.isDown || cursors.down.isDown) player.body.setVelocityY(350);
 
-            // Colisión con Muros
             let dP = Phaser.Math.Distance.Between(player.x, player.y, CX, CY);
             let aP = Phaser.Math.Angle.WrapDegrees(Phaser.Math.RadToDeg(Phaser.Math.Angle.Between(CX, CY, player.x, player.y)));
             rings.forEach(r => {
@@ -103,18 +99,17 @@
                 }
             });
 
-            // Lógica de Disparo del Virus
-            if (time > lastVShot + 1800) {
+            if (time > lastVShot + 1600) {
                 lastVShot = time;
                 let vb = this.add.circle(CX, CY, 7, 0xff003c);
                 let ang = Phaser.Math.Angle.Between(CX, CY, player.x, player.y);
-                vb.vx = Math.cos(ang) * 6;
-                vb.vy = Math.sin(ang) * 6;
+                vb.vx = Math.cos(ang) * 7;
+                vb.vy = Math.sin(ang) * 7;
                 vBullets.push(vb);
             }
             virus.rotation += 0.03;
 
-            // Procesar Balas Jugador (Daño al Virus)
+            // Lógica de Balas del Jugador + CARGA DEL SÚPER
             for (let i = pBullets.length - 1; i >= 0; i--) {
                 let b = pBullets[i];
                 b.x += b.vx; b.y += b.vy;
@@ -123,11 +118,13 @@
                     b.destroy();
                     pBullets.splice(i, 1);
                     virus.hp--;
-                    vHealthBar.width = (virus.hp / 3) * 50; // Actualizar barra roja
+                    vHealthBar.width = (virus.hp / 3) * 50;
                     
                     if (virus.hp <= 0) {
                         kills++;
-                        document.getElementById('kText').innerText = kills;
+                        // Actualizar UI del Súper
+                        document.getElementById('sCount').innerText = kills;
+                        if (kills >= 5) document.getElementById('super-alert').style.display = 'block';
                         spawnVirus(this);
                     }
                     continue;
@@ -137,11 +134,9 @@
                 }
             }
 
-            // Procesar Balas Virus (Daño al Jugador)
             for (let j = vBullets.length - 1; j >= 0; j--) {
                 let vb = vBullets[j];
                 vb.x += vb.vx; vb.y += vb.vy;
-
                 if (Phaser.Math.Distance.Between(vb.x, vb.y, player.x, player.y) < 22) {
                     playerHP -= 10;
                     document.getElementById('hpText').innerText = Math.floor(playerHP);
@@ -155,14 +150,12 @@
                 }
             }
 
-            // Actualizar Interfaz sobre el Jugador
             pHealthBar.setPosition(player.x, player.y - 30).width = (playerHP/60)*40;
             for(let i=0; i<3; i++) {
                 ammoBars[i].setPosition(player.x - 15 + (i*15), player.y - 22);
                 ammoBars[i].visible = (i < ammo);
             }
 
-            // Recarga
             if (time > nextAmmo && ammo < 3) { ammo++; nextAmmo = time + 1000; }
         }
     </script>
