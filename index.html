@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>CORE ARENA - Fixed Core</title>
+    <title>CORE ARENA - Limited Range</title>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-arcade-physics.min.js"></script>
     <style>
         body { margin: 0; background-color: #050505; color: #00ff41; font-family: 'Courier New', monospace; overflow: hidden; display: flex; flex-direction: column; align-items: center; }
@@ -45,7 +45,6 @@
             balas = this.physics.add.group();
             viruses = this.physics.add.group();
 
-            // BIT empieza en el segundo anillo (330r)
             player = this.add.rectangle(CX + 380, CY, 24, 24, 0x00ff41).setDepth(10);
             this.physics.add.existing(player);
             player.body.setCircle(12);
@@ -57,7 +56,6 @@
             for(let i=0; i<3; i++) ammoBars[i] = this.add.rectangle(0, 0, 10, 4, 0x00e5ff).setDepth(20);
             pulseRing = this.add.circle(0, 0, 10, 0x00e5ff, 0.3).setVisible(false).setDepth(5);
 
-            // Colisiones
             this.physics.add.overlap(balas, viruses, (b, v) => {
                 b.destroy(); v.destroy();
                 kills = Math.min(5, kills + 1);
@@ -84,6 +82,10 @@
                     let b = this.add.circle(player.x, player.y, 5, 0x00e5ff);
                     balas.add(b);
                     this.physics.moveTo(b, p.x, p.y, 750);
+                    
+                    // --- ARREGLO RANGO INFINITO ---
+                    // La bala se destruye sola tras 500ms si no choca con nada
+                    this.time.delayedCall(500, () => { if(b.active) b.destroy(); });
                 }
             });
 
@@ -98,7 +100,6 @@
         }
 
         function update(time) {
-            // Dibujar laberinto limpio en cada frame
             gfx.clear();
             gfx.lineStyle(6, 0x00ff41, 1);
             rings.forEach(ring => {
@@ -115,7 +116,6 @@
             if (wasd.W.isDown || cursors.up.isDown) player.body.setVelocityY(-340);
             else if (wasd.S.isDown || cursors.down.isDown) player.body.setVelocityY(340);
 
-            // Regeneración Bit (15 HP cada 4s de calma)
             if (time - lastActionTime > 4000 && playerHP < 60) {
                 playerHP = Math.min(60, playerHP + 15);
                 lastActionTime = time;
@@ -137,7 +137,6 @@
                 });
             }
 
-            // Física de anillos
             [player, ...viruses.getChildren()].forEach(obj => {
                 if(!obj || !obj.body) return;
                 const d = Phaser.Math.Distance.Between(obj.x, obj.y, CX, CY);
