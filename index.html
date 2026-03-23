@@ -2,13 +2,13 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>CORE ARENA - Damage Numbers</title>
+    <title>CORE ARENA - Big Damage Numbers</title>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-arcade-physics.min.js"></script>
     <style>
         body { margin: 0; background-color: #050505; color: #00ff41; font-family: 'Courier New', monospace; display: flex; flex-direction: column; align-items: center; }
         canvas { border: 2px solid #00e5ff; margin-top: 10px; box-shadow: 0 0 20px #00e5ff; }
         .ui { text-align: center; padding: 10px; pointer-events: none; position: absolute; top: 10px; width: 100%; z-index: 100; }
-        #super-hint { color: #ff00ff; font-weight: bold; display: none; text-shadow: 0 0 10px #ff00ff; font-size: 20px; }
+        #super-hint { color: #ff00ff; font-weight: bold; display: none; text-shadow: 0 0 15px #ff00ff; font-size: 24px; }
     </style>
 </head>
 <body>
@@ -63,20 +63,25 @@
             });
         }
 
-        // FUNCIÓN PARA MOSTRAR DAÑO
-        function showDamage(scene, x, y, amount, color) {
-            let txt = scene.add.text(x, y - 20, amount, { 
-                fontFamily: 'Courier New', 
-                fontSize: amount === "-5" ? '28px' : '20px', 
-                fontWeight: 'bold', 
-                color: color 
-            }).setOrigin(0.5);
+        // SISTEMA DE DAÑO GIGANTE
+        function showDamage(scene, x, y, amount, color, isSuper = false) {
+            let size = isSuper ? '64px' : '32px'; // Tamaño mucho más grande
+            let txt = scene.add.text(x, y - 40, amount, { 
+                fontFamily: 'Arial Black', // Fuente más gruesa
+                fontSize: size, 
+                color: color,
+                stroke: '#000000',
+                strokeThickness: 6
+            }).setOrigin(0.5).setDepth(100).setScale(0);
 
+            // Animación de "Pop" y subida
             scene.tweens.add({
                 targets: txt,
-                y: y - 80,
+                scale: 1,
+                y: y - 120,
                 alpha: 0,
-                duration: 800,
+                duration: 600,
+                ease: 'Back.easeOut',
                 onComplete: () => txt.destroy()
             });
         }
@@ -103,7 +108,6 @@
                 lanzarSuper(this);
             }
 
-            // Colisiones muros
             let dP = Phaser.Math.Distance.Between(player.x, player.y, CX, CY);
             let aP = Phaser.Math.Angle.WrapDegrees(Phaser.Math.RadToDeg(Phaser.Math.Angle.Between(CX, CY, player.x, player.y)));
             rings.forEach(r => {
@@ -128,13 +132,12 @@
             }
             if(virus) virus.rotation += 0.04;
 
-            // Balas Jugador e impacto
             pBullets.forEach((b, i) => {
                 b.x += b.vx; b.y += b.vy;
                 if (virus && Phaser.Math.Distance.Between(b.x, b.y, CX, CY) < 40) {
                     b.destroy(); pBullets.splice(i, 1);
                     virusHP--;
-                    showDamage(this, CX, CY, "-1", "#00e5ff"); // Daño visual
+                    showDamage(this, CX + (Math.random()*40-20), CY, "-1", "#00e5ff", false);
                     vHealthBar.width = (virusHP / 50) * 60;
                     if (superCharge < 10) {
                         superCharge++;
@@ -168,18 +171,18 @@
             document.getElementById('super-hint').style.display = 'none';
             let onda = scene.add.circle(player.x, player.y, 10, 0xff00ff, 0.4).setDepth(1);
             
-            if (virus && Phaser.Math.Distance.Between(player.x, player.y, CX, CY) < 500) {
+            if (virus && Phaser.Math.Distance.Between(player.x, player.y, CX, CY) < 550) {
                 virusHP -= 5;
-                showDamage(scene, CX, CY, "-5", "#ff00ff"); // Daño visual del súper
+                showDamage(scene, CX, CY - 20, "-5", "#ff00ff", true); // Daño de super GIGANTE
                 vHealthBar.width = Math.max(0, (virusHP / 50) * 60);
-                scene.cameras.main.shake(200, 0.02);
+                scene.cameras.main.shake(300, 0.03);
                 if (virusHP <= 0) ganar();
             }
 
-            vBullets.forEach((vb) => { if (Phaser.Math.Distance.Between(player.x, player.y, vb.x, vb.y) < 400) vb.destroy(); });
+            vBullets.forEach((vb) => { if (Phaser.Math.Distance.Between(player.x, player.y, vb.x, vb.y) < 450) vb.destroy(); });
             vBullets = vBullets.filter(vb => vb.active);
 
-            scene.tweens.add({ targets: onda, radius: 500, alpha: 0, duration: 500, onComplete: () => onda.destroy() });
+            scene.tweens.add({ targets: onda, radius: 550, alpha: 0, duration: 500, onComplete: () => onda.destroy() });
         }
 
         function ganar() {
