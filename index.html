@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>CORE ARENA - Ghost Virus</title>
+    <title>CORE ARENA - Triple Hit Virus</title>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-arcade-physics.min.js"></script>
     <style>
         body { margin: 0; background-color: #050505; color: #00ff41; font-family: 'Courier New', monospace; overflow: hidden; display: flex; flex-direction: column; align-items: center; }
@@ -14,7 +14,7 @@
     <div class="ui-container">
         <h1 style="margin:0;">[ CORE ARENA ]</h1>
         <p style="margin:5px;">Súper: <span id="sCount">0</span>/5 | HP: <span id="hpText">60</span>/60</p>
-        <small style="color: #ff003c;">ADVERTENCIA: Virus detectado con fase cuántica (Atraviesa muros)</small>
+        <small style="color: #00e5ff;">INFO: Los virus requieren 3 disparos para ser eliminados</small>
     </div>
 
     <script>
@@ -29,8 +29,9 @@
         const game = new Phaser.Game(config);
         const CX = 800, CY = 600;
         let player, viruses, balas, pulseRing, gfx;
-        let playerHP = 60, lastActionTime = 0, lastReload = 0, kills = 0, playerAmmo = 3;
-        let healthBar, ammoBars = [], wasd, cursors, spaceKey;
+        let playerHP, kills, playerAmmo;
+        let lastActionTime = 0, lastReload = 0, wasd, cursors, spaceKey;
+        let healthBar, ammoBars = [];
 
         const rings = [
             { r: 160, gap: 0 }, { r: 330, gap: 90 }, { r: 500, gap: 180 }, { r: 700, gap: 270 }
@@ -39,6 +40,12 @@
         function preload() {}
 
         function create() {
+            playerHP = 60;
+            kills = 0;
+            playerAmmo = 3;
+            document.getElementById('sCount').innerText = "0";
+            document.getElementById('hpText').innerText = "60";
+
             this.physics.world.setBounds(0, 0, 1600, 1200);
             gfx = this.add.graphics();
             balas = this.physics.add.group();
@@ -53,19 +60,32 @@
 
             healthBar = this.add.rectangle(0, 0, 40, 5, 0x00ff00).setDepth(20);
             for(let i=0; i<3; i++) ammoBars[i] = this.add.rectangle(0, 0, 10, 4, 0x00e5ff).setDepth(20);
-            pulseRing = this.add.circle(0, 0, 10, 0x00e5ff, 0.3).setVisible(false);
 
+            // SISTEMA DE DAÑO A VIRUS (3 TOQUES)
             this.physics.add.overlap(balas, viruses, (b, v) => {
-                b.destroy(); v.destroy();
-                kills = Math.min(5, kills + 1);
-                document.getElementById('sCount').innerText = kills;
-                this.time.delayedCall(1200, () => spawnVirus(this));
+                b.destroy(); // La bala siempre se destruye
+                
+                v.hp -= 1; // Restar vida al virus
+                v.setTint(0xffffff); // Feedback visual: parpadeo blanco
+                this.time.delayedCall(100, () => { if(v.active) v.clearTint(); });
+
+                if (v.hp <= 0) {
+                    v.destroy();
+                    kills = Math.min(5, kills + 1);
+                    document.getElementById('sCount').innerText = kills;
+                    this.time.delayedCall(1200, () => spawnVirus(this));
+                }
             });
 
             this.physics.add.overlap(player, viruses, (p, v) => {
-                playerHP -= 0.6; 
-                lastActionTime = this.time.now;
-                if(playerHP <= 0) this.scene.restart();
+                if (playerHP > 0) {
+                    playerHP -= 0.6; 
+                    lastActionTime = this.time.now;
+                    if(playerHP <= 0) {
+                        playerHP = 0;
+                        this.scene.restart();
+                    }
+                }
             });
 
             wasd = this.input.keyboard.addKeys('W,A,S,D');
@@ -73,7 +93,7 @@
             spaceKey = this.input.keyboard.addKey('SPACE');
 
             this.input.on('pointerdown', (pointer) => {
-                if(playerAmmo > 0) {
+                if(playerAmmo > 0 && playerHP > 0) {
                     playerAmmo--;
                     lastActionTime = this.time.now;
                     let p = pointer.positionToCamera(this.cameras.main);
@@ -89,9 +109,13 @@
 
         function spawnVirus(scene) {
             let v = scene.add.triangle(CX, CY, 0, 24, 12, 0, 24, 24, 0xff003c);
-            v.setAlpha(0.7); // Efecto fantasmagórico
+            v.setAlpha(0.7);
             scene.physics.add.existing(v);
             v.body.setCircle(12);
+            
+            // PROPIEDAD DE VIDA
+            v.hp = 3; 
+            
             viruses.add(v);
         }
 
@@ -105,24 +129,24 @@
             });
 
             player.body.setVelocity(0);
-            if (wasd.A.isDown || cursors.left.isDown) player.body.setVelocityX(-340);
-            else if (wasd.D.isDown || cursors.right.isDown) player.body.setVelocityX(340);
-            if (wasd.W.isDown || cursors.up.isDown) player.body.setVelocityY(-340);
-            else if (wasd.S.isDown || cursors.down.isDown) player.body.setVelocityY(340);
+            if (playerHP > 0) {
+                if (wasd.A.isDown || cursors.left.isDown) player.body.setVelocityX(-340);
+                else if (wasd.D.isDown || cursors.right.isDown) player.body.setVelocityX(340);
+                if (wasd.W.isDown || cursors.up.isDown) player.body.setVelocityY(-340);
+                else if (wasd.S.isDown || cursors.down.isDown) player.body.setVelocityY(340);
+            }
 
-            if (time - lastActionTime > 4000 && playerHP < 60) {
+            if (time - lastActionTime > 4000 && playerHP < 60 && playerHP > 0) {
                 playerHP = Math.min(60, playerHP + 15);
                 lastActionTime = time;
             }
-            document.getElementById('hpText').innerText = Math.floor(playerHP);
+            document.getElementById('hpText').innerText = Math.max(0, Math.floor(playerHP));
 
-            // IA VIRUS: PERSECUCIÓN TOTAL (IGNORA MUROS)
             viruses.getChildren().forEach(v => {
-                this.physics.moveToObject(v, player, 200); // Un poco más lento que Bit para compensar que atraviesa muros
+                this.physics.moveToObject(v, player, 190);
                 v.rotation = Phaser.Math.Angle.Between(v.x, v.y, player.x, player.y) + Math.PI/2;
             });
 
-            // Colisiones Físicas SOLO PARA BIT Y BALAS
             [player, ...balas.getChildren()].forEach(obj => {
                 if(!obj || !obj.body) return;
                 const d = Phaser.Math.Distance.Between(obj.x, obj.y, CX, CY);
@@ -138,7 +162,7 @@
                                 obj.x = CX + Math.cos(rad) * (r.r + (24 * p));
                                 obj.y = CY + Math.sin(rad) * (r.r + (24 * p));
                             } else {
-                                obj.destroy(); // Balas mueren al tocar muros
+                                obj.destroy();
                             }
                         }
                     }
