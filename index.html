@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>CORE ARENA - Limited Range</title>
+    <title>CORE ARENA - Smart Virus AI</title>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-arcade-physics.min.js"></script>
     <style>
         body { margin: 0; background-color: #050505; color: #00ff41; font-family: 'Courier New', monospace; overflow: hidden; display: flex; flex-direction: column; align-items: center; }
@@ -45,6 +45,7 @@
             balas = this.physics.add.group();
             viruses = this.physics.add.group();
 
+            // Bit empieza en el laberinto
             player = this.add.rectangle(CX + 380, CY, 24, 24, 0x00ff41).setDepth(10);
             this.physics.add.existing(player);
             player.body.setCircle(12);
@@ -82,9 +83,6 @@
                     let b = this.add.circle(player.x, player.y, 5, 0x00e5ff);
                     balas.add(b);
                     this.physics.moveTo(b, p.x, p.y, 750);
-                    
-                    // --- ARREGLO RANGO INFINITO ---
-                    // La bala se destruye sola tras 500ms si no choca con nada
                     this.time.delayedCall(500, () => { if(b.active) b.destroy(); });
                 }
             });
@@ -137,6 +135,36 @@
                 });
             }
 
+            // IA Virus con Búsqueda de Puertas
+            viruses.getChildren().forEach(v => {
+                const distV = Phaser.Math.Distance.Between(v.x, v.y, CX, CY);
+                const distP = Phaser.Math.Distance.Between(player.x, player.y, CX, CY);
+                const angleV = Phaser.Math.Angle.WrapDegrees(Phaser.Math.RadToDeg(Phaser.Math.Angle.Between(CX, CY, v.x, v.y)));
+                
+                let targetAngle;
+                let targetDir = Phaser.Math.Angle.Between(v.x, v.y, player.x, player.y);
+
+                // Encontrar en qué anillo está el virus
+                let currentRing = rings.slice().reverse().find(r => distV > r.r - 20);
+                
+                if (currentRing) {
+                    // Si el jugador está fuera del alcance radial del virus, el virus busca la puerta
+                    const playerInDifferentSector = Math.abs(distV - distP) > 60;
+                    
+                    if (playerInDifferentSector) {
+                        // Ir hacia la puerta del anillo actual
+                        targetDir = Phaser.Math.Angle.Between(v.x, v.y, 
+                            CX + Math.cos(Phaser.Math.DegToRad(currentRing.gap)) * currentRing.r,
+                            CY + Math.sin(Phaser.Math.DegToRad(currentRing.gap)) * currentRing.r
+                        );
+                    }
+                }
+
+                v.body.setVelocity(Math.cos(targetDir) * 230, Math.sin(targetDir) * 230);
+                v.rotation = targetDir + Math.PI/2;
+            });
+
+            // Colisiones Físicas
             [player, ...viruses.getChildren()].forEach(obj => {
                 if(!obj || !obj.body) return;
                 const d = Phaser.Math.Distance.Between(obj.x, obj.y, CX, CY);
@@ -165,12 +193,6 @@
                         if (diff > 30) b.destroy();
                     }
                 });
-            });
-
-            viruses.getChildren().forEach(v => {
-                let ang = Phaser.Math.Angle.Between(v.x, v.y, player.x, player.y);
-                v.body.setVelocity(Math.cos(ang) * 230, Math.sin(ang) * 230);
-                v.rotation = ang + Math.PI/2;
             });
 
             if (playerAmmo < 3 && time > lastReload + 1000) { playerAmmo++; lastReload = time; }
