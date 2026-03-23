@@ -2,11 +2,11 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>CORE ARENA - Epic Damage</title>
+    <title>CORE ARENA - Death Effects</title>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-arcade-physics.min.js"></script>
     <style>
-        body { margin: 0; background-color: #050505; color: #00ff41; font-family: 'Courier New', monospace; display: flex; flex-direction: column; align-items: center; }
-        canvas { border: 2px solid #00e5ff; margin-top: 10px; box-shadow: 0 0 30px #ff00ff; }
+        body { margin: 0; background-color: #050505; color: #00ff41; font-family: 'Courier New', monospace; display: flex; flex-direction: center; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
+        canvas { border: 2px solid #00e5ff; box-shadow: 0 0 30px #ff003c; }
         .ui { text-align: center; padding: 10px; pointer-events: none; position: absolute; top: 10px; width: 100%; z-index: 100; }
         #super-hint { color: #ff00ff; font-weight: bold; display: none; text-shadow: 0 0 20px #ff00ff; font-size: 28px; }
     </style>
@@ -63,40 +63,38 @@
             });
         }
 
-        // TEXTO DE DAÑO ÉPICO
-        function showDamage(scene, x, y, amount, color, isSuper = false) {
-            let fontSize = isSuper ? '80px' : '40px'; 
-            let duration = isSuper ? 1500 : 800; // Dura más si es Súper
-
-            let txt = scene.add.text(x, y - 50, amount, { 
-                fontFamily: 'Arial Black', 
-                fontSize: fontSize, 
-                color: color,
-                stroke: '#ffffff',
-                strokeThickness: isSuper ? 4 : 2,
-                shadow: { offsetX: 0, offsetY: 0, color: color, blur: 15, fill: true }
+        function showDamage(scene, x, y, amount, color, sizeCustom = '40px') {
+            let txt = scene.add.text(x, y - 40, amount, { 
+                fontFamily: 'Arial Black', fontSize: sizeCustom, color: color, stroke: '#000000', strokeThickness: 4
             }).setOrigin(0.5).setDepth(100);
+            scene.tweens.add({ targets: txt, y: y - 120, alpha: 0, duration: 1000, onComplete: () => txt.destroy() });
+        }
 
-            // Animación de subida lenta y desaparición
-            scene.tweens.add({
-                targets: txt,
-                y: y - 150,
-                alpha: 0,
-                scale: isSuper ? 1.2 : 1,
-                duration: duration,
-                ease: 'Cubic.out',
-                onComplete: () => txt.destroy()
+        function deathExplosion(scene, x, y, color) {
+            for(let i=0; i<15; i++) {
+                let p = scene.add.rectangle(x, y, 12, 12, color);
+                scene.physics.add.existing(p);
+                p.body.setVelocity(Phaser.Math.Between(-300, 300), Phaser.Math.Between(-300, 300));
+                scene.tweens.add({ targets: p, angle: 360, alpha: 0, duration: 1000, onComplete: () => p.destroy() });
+            }
+        }
+
+        function glitchEffect(scene, target) {
+            scene.time.addEvent({
+                delay: 50,
+                repeat: 10,
+                callback: () => {
+                    target.x += Phaser.Math.Between(-15, 15);
+                    target.fillColor = (Math.random() > 0.5) ? 0xffffff : 0x00ff41;
+                    target.scaleX = Math.random() * 2;
+                }
             });
-
-            // Si es súper, que vibre la pantalla más tiempo
-            if(isSuper) scene.cameras.main.shake(300, 0.04);
         }
 
         function update(time) {
             if (gameEnded) return;
 
-            gfx.clear();
-            gfx.lineStyle(6, 0x00ff41);
+            gfx.clear(); gfx.lineStyle(6, 0x00ff41);
             rings.forEach(r => {
                 gfx.beginPath();
                 gfx.arc(CX, CY, r.r, Phaser.Math.DegToRad(r.g + 40), Phaser.Math.DegToRad(r.g + 320));
@@ -110,24 +108,7 @@
             if (keys.W.isDown || cursors.up.isDown) player.body.setVelocityY(-350);
             else if (keys.S.isDown || cursors.down.isDown) player.body.setVelocityY(350);
 
-            if (Phaser.Input.Keyboard.JustDown(keys.SPACE) && superCharge >= 10) {
-                lanzarSuper(this);
-            }
-
-            let dP = Phaser.Math.Distance.Between(player.x, player.y, CX, CY);
-            let aP = Phaser.Math.Angle.WrapDegrees(Phaser.Math.RadToDeg(Phaser.Math.Angle.Between(CX, CY, player.x, player.y)));
-            rings.forEach(r => {
-                if (Math.abs(dP - r.r) < 15) {
-                    let diff = Math.abs(aP - r.g);
-                    if (diff > 180) diff = 360 - diff;
-                    if (diff > 35) {
-                        let push = (dP > r.r) ? 20 : -20;
-                        let rad = Phaser.Math.DegToRad(aP);
-                        player.x = CX + Math.cos(rad) * (r.r + push);
-                        player.y = CY + Math.sin(rad) * (r.r + push);
-                    }
-                }
-            });
+            if (Phaser.Input.Keyboard.JustDown(keys.SPACE) && superCharge >= 10) lanzarSuper(this);
 
             if (virus && time > lastVShot + 1200) {
                 lastVShot = time;
@@ -136,20 +117,16 @@
                 vb.vx = Math.cos(ang) * 8; vb.vy = Math.sin(ang) * 8;
                 vBullets.push(vb);
             }
-            if(virus) virus.rotation += 0.04;
 
             pBullets.forEach((b, i) => {
                 b.x += b.vx; b.y += b.vy;
                 if (virus && Phaser.Math.Distance.Between(b.x, b.y, CX, CY) < 40) {
                     b.destroy(); pBullets.splice(i, 1);
                     virusHP--;
-                    showDamage(this, CX + (Math.random()*60-30), CY, "-1", "#00e5ff", false);
+                    showDamage(this, CX, CY, "-1", "#00e5ff", '35px');
                     vHealthBar.width = (virusHP / 50) * 60;
-                    if (superCharge < 10) {
-                        superCharge++;
-                        if(superCharge >= 10) document.getElementById('super-hint').style.display = 'inline';
-                    }
-                    if (virusHP <= 0) ganar();
+                    if (superCharge < 10) { superCharge++; if(superCharge >= 10) document.getElementById('super-hint').style.display = 'inline'; }
+                    if (virusHP <= 0) morirVirus(this);
                 }
             });
 
@@ -157,44 +134,46 @@
                 vb.x += vb.vx; vb.y += vb.vy;
                 if (Phaser.Math.Distance.Between(vb.x, vb.y, player.x, player.y) < 22) {
                     playerHP -= 10;
+                    showDamage(this, player.x, player.y, "-10", "#ff003c", '45px');
                     document.getElementById('hpText').innerText = Math.floor(playerHP);
                     vb.destroy(); vBullets.splice(j, 1);
-                    if (playerHP <= 0) location.reload();
+                    if (playerHP <= 0) morirBit(this);
                 }
             });
 
             pHealthBar.setPosition(player.x, player.y - 30).width = (playerHP/60)*40;
             superBar.setPosition(player.x, player.y - 25).width = (superCharge/10)*40;
-            for(let i=0; i<3; i++) {
-                ammoBars[i].setPosition(player.x - 15 + (i*15), player.y - 18);
-                ammoBars[i].visible = (i < ammo);
-            }
+            for(let i=0; i<3; i++) { ammoBars[i].setPosition(player.x-15+(i*15), player.y-18); ammoBars[i].visible=(i<ammo); }
             if (time > nextAmmo && ammo < 3) { ammo++; nextAmmo = time + 1000; }
         }
 
-        function lanzarSuper(scene) {
-            superCharge = 0;
-            document.getElementById('super-hint').style.display = 'none';
-            let onda = scene.add.circle(player.x, player.y, 10, 0xff00ff, 0.4).setDepth(1);
-            
-            if (virus && Phaser.Math.Distance.Between(player.x, player.y, CX, CY) < 600) {
-                virusHP -= 5;
-                showDamage(scene, CX, CY, "-5", "#ff00ff", true); 
-                vHealthBar.width = Math.max(0, (virusHP / 50) * 60);
-                if (virusHP <= 0) ganar();
-            }
-
-            vBullets.forEach((vb) => { if (Phaser.Math.Distance.Between(player.x, player.y, vb.x, vb.y) < 500) vb.destroy(); });
-            vBullets = vBullets.filter(vb => vb.active);
-
-            scene.tweens.add({ targets: onda, radius: 600, alpha: 0, duration: 600, onComplete: () => onda.destroy() });
+        function morirVirus(scene) {
+            gameEnded = true;
+            deathExplosion(scene, CX, CY, 0xff003c);
+            virus.destroy(); vHealthBar.destroy(); vHealthBG.destroy();
+            document.getElementById('super-hint').innerText = "¡NÚCLEO ELIMINADO!";
+            document.getElementById('super-hint').style.display = 'block';
+            scene.cameras.main.flash(500, 255, 0, 60);
         }
 
-        function ganar() {
+        function morirBit(scene) {
             gameEnded = true;
-            if (virus) { virus.destroy(); vHealthBar.destroy(); vHealthBG.destroy(); }
-            document.getElementById('super-hint').innerText = "¡SISTEMA PURGADO! VICTORIA";
-            document.getElementById('super-hint').style.display = 'block';
+            glitchEffect(scene, player);
+            scene.cameras.main.shake(500, 0.05);
+            scene.time.delayedCall(1000, () => location.reload());
+        }
+
+        function lanzarSuper(scene) {
+            superCharge = 0; document.getElementById('super-hint').style.display = 'none';
+            let onda = scene.add.circle(player.x, player.y, 10, 0xff00ff, 0.4).setDepth(1);
+            if (virus && Phaser.Math.Distance.Between(player.x, player.y, CX, CY) < 600) {
+                virusHP -= 5;
+                showDamage(scene, CX, CY, "-5", "#ff00ff", '80px'); 
+                vHealthBar.width = Math.max(0, (virusHP / 50) * 60);
+                if (virusHP <= 0) morirVirus(scene);
+            }
+            vBullets.forEach(vb => vb.destroy()); vBullets = [];
+            scene.tweens.add({ targets: onda, radius: 600, alpha: 0, duration: 600, onComplete: () => onda.destroy() });
         }
     </script>
 </body>
