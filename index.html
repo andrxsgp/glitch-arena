@@ -2,143 +2,140 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>CORE ARENA - Manual Collision Fix</title>
+    <title>CORE ARENA - Final Fix</title>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-arcade-physics.min.js"></script>
     <style>
         body { margin: 0; background-color: #050505; color: #00ff41; font-family: 'Courier New', monospace; overflow: hidden; display: flex; flex-direction: column; align-items: center; }
-        canvas { border: 2px solid #00e5ff; box-shadow: 0 0 20px #00e5ff; margin-top: 10px; }
-        .ui-container { text-align: center; pointer-events: none; z-index: 10; margin-top: 10px; }
+        canvas { border: 2px solid #00e5ff; box-shadow: 0 0 20px #00e5ff; margin: 10px; }
     </style>
 </head>
 <body>
-    <div class="ui-container">
+    <div style="text-align: center; color: #00ff41;">
         <h1 style="margin:0;">[ CORE ARENA ]</h1>
-        <p style="margin:5px;">Súper: <span id="sCount">0</span>/5 | HP: <span id="hpText">60</span>/60</p>
+        <p>HP: <span id="hp">60</span> | Kills: <span id="kk">0</span></p>
     </div>
 
     <script>
         const config = {
-            type: Phaser.AUTO,
-            width: 1000, height: 550,
-            backgroundColor: '#050505',
-            physics: { default: 'arcade', arcade: { debug: false } },
-            scene: { preload: preload, create: create, update: update }
+            type: Phaser.AUTO, width: 900, height: 500,
+            physics: { default: 'arcade' },
+            scene: { create: create, update: update }
         };
 
         const game = new Phaser.Game(config);
-        const CX = 800, CY = 600;
-        let player, viruses, balas, gfx;
-        let playerHP = 60, kills = 0, playerAmmo = 3, lastReload = 0;
-        const rings = [{ r: 160, gap: 0 }, { r: 330, gap: 90 }, { r: 500, gap: 180 }, { r: 700, gap: 270 }];
-
-        function preload() {}
+        let player, virus, gfx, cursors, keys;
+        let bullets = [];
+        let hp = 60, score = 0, ammo = 3, nextAmmo = 0;
+        const CX = 450, CY = 250;
+        const rings = [{r:100, g:0}, {r:180, g:90}, {r:260, g:180}];
 
         function create() {
-            this.physics.world.setBounds(0, 0, 1600, 1200);
             gfx = this.add.graphics();
-            balas = this.add.group(); // Grupo normal, no de física, para control total
-            viruses = this.physics.add.group();
-
-            player = this.add.rectangle(CX + 350, CY, 24, 24, 0x00ff41).setDepth(10);
+            player = this.add.rectangle(CX+120, CY, 20, 20, 0x00ff41);
             this.physics.add.existing(player);
-            player.body.setCircle(12);
             
-            this.cameras.main.setBounds(0, 0, 1600, 1200).setZoom(0.8).startFollow(player, true, 0.1, 0.1);
+            // Creamos un solo virus para empezar y evitar saturación
+            spawnVirus(this);
 
-            // Único overlap: Virus contra Jugador (que sí funciona)
-            this.physics.add.overlap(player, viruses, () => {
-                playerHP -= 0.2;
-                document.getElementById('hpText').innerText = Math.max(0, Math.floor(playerHP));
-                if(playerHP <= 0) location.reload(); // Reinicio total del navegador para limpiar memoria
-            });
+            cursors = this.input.keyboard.createCursorKeys();
+            keys = this.input.keyboard.addKeys('W,A,S,D');
 
             this.input.on('pointerdown', (pointer) => {
-                if(playerAmmo > 0) {
-                    playerAmmo--;
-                    let p = pointer.positionToCamera(this.cameras.main);
-                    let b = this.add.circle(player.x, player.y, 5, 0x00e5ff);
+                if (ammo > 0) {
+                    ammo--;
+                    let b = this.add.circle(player.x, player.y, 4, 0x00e5ff);
                     this.physics.add.existing(b);
-                    balas.add(b);
-                    this.physics.moveTo(b, p.x, p.y, 800);
+                    // Disparo directo
+                    let angle = Phaser.Math.Angle.Between(player.x, player.y, pointer.x, pointer.y);
+                    b.body.setVelocity(Math.cos(angle)*600, Math.sin(angle)*600);
+                    bullets.push(b);
                 }
             });
-
-            spawnVirus(this);
         }
 
         function spawnVirus(scene) {
-            let v = scene.add.triangle(CX, CY, 0, 24, 12, 0, 24, 24, 0xff003c);
-            scene.physics.add.existing(v);
-            v.body.setCircle(12);
-            v.hp = 3;
-            v.setAlpha(0.7);
-            viruses.add(v);
+            if (virus) virus.destroy();
+            virus = scene.add.triangle(CX, CY-150, 0, 20, 10, 0, 20, 20, 0xff003c);
+            scene.physics.add.existing(virus);
+            virus.hp = 3;
         }
 
         function update(time) {
             gfx.clear();
-            gfx.lineStyle(6, 0x00ff41, 1);
-            rings.forEach(ring => {
-                let start = Phaser.Math.DegToRad(ring.gap + 38);
-                let end = Phaser.Math.DegToRad(ring.gap + 322);
-                gfx.beginPath(); gfx.arc(CX, CY, ring.r, start, end, false); gfx.strokePath();
+            gfx.lineStyle(4, 0x00ff41);
+            rings.forEach(r => {
+                gfx.beginPath();
+                gfx.arc(CX, CY, r.r, Phaser.Math.DegToRad(r.g+40), Phaser.Math.DegToRad(r.g+320));
+                gfx.strokePath();
             });
 
             // Movimiento Bit
             player.body.setVelocity(0);
-            let cursors = this.input.keyboard.createCursorKeys();
-            let keys = this.input.keyboard.addKeys('W,A,S,D');
-            if (keys.A.isDown || cursors.left.isDown) player.body.setVelocityX(-350);
-            else if (keys.D.isDown || cursors.right.isDown) player.body.setVelocityX(350);
-            if (keys.W.isDown || cursors.up.isDown) player.body.setVelocityY(-350);
-            else if (keys.S.isDown || cursors.down.isDown) player.body.setVelocityY(350);
+            if (keys.A.isDown || cursors.left.isDown) player.body.setVelocityX(-300);
+            if (keys.D.isDown || cursors.right.isDown) player.body.setVelocityX(300);
+            if (keys.W.isDown || cursors.up.isDown) player.body.setVelocityY(-300);
+            if (keys.S.isDown || cursors.down.isDown) player.body.setVelocityY(300);
 
-            // LÓGICA MANUAL DE IMPACTO (SIN OVERLAPS DE MOTOR)
-            balas.getChildren().forEach(b => {
-                viruses.getChildren().forEach(v => {
-                    let dist = Phaser.Math.Distance.Between(b.x, b.y, v.x, v.y);
-                    if (dist < 25) { // Si hay choque
-                        b.destroy(); // Borrar bala inmediatamente
-                        v.hp--;
-                        v.setTint(0xffffff);
-                        this.time.delayedCall(100, () => { if(v.active) v.clearTint(); });
-                        
-                        if(v.hp <= 0) {
-                            v.destroy();
-                            kills++;
-                            document.getElementById('sCount').innerText = kills;
-                            this.time.delayedCall(1000, () => spawnVirus(this));
-                        }
-                    }
-                });
-                // Limpieza automática de balas lejanas
-                if (Phaser.Math.Distance.Between(b.x, b.y, player.x, player.y) > 1000) b.destroy();
-            });
-
-            // Movimiento Virus
-            viruses.getChildren().forEach(v => {
-                let angle = Phaser.Math.Angle.Between(v.x, v.y, player.x, player.y);
-                v.body.setVelocity(Math.cos(angle) * 175, Math.sin(angle) * 175);
-                v.rotation = angle + Math.PI/2;
-            });
-
-            // Muros (Solo Bit)
-            const d = Phaser.Math.Distance.Between(player.x, player.y, CX, CY);
-            const a = Phaser.Math.Angle.WrapDegrees(Phaser.Math.RadToDeg(Phaser.Math.Angle.Between(CX, CY, player.x, player.y)));
+            // Muros para Bit
+            let distP = Phaser.Math.Distance.Between(player.x, player.y, CX, CY);
+            let angP = Phaser.Math.Angle.WrapDegrees(Phaser.Math.RadToDeg(Phaser.Math.Angle.Between(CX, CY, player.x, player.y)));
             rings.forEach(r => {
-                if (Math.abs(d - r.r) < 15) {
-                    let diff = Math.abs(a - r.gap);
+                if (Math.abs(distP - r.r) < 10) {
+                    let diff = Math.abs(angP - r.g);
                     if (diff > 180) diff = 360 - diff;
-                    if (diff > 35) {
-                        const p = (d > r.r) ? 26 : -26;
-                        const rad = Phaser.Math.DegToRad(a);
-                        player.x = CX + Math.cos(rad) * (r.r + p);
-                        player.y = CY + Math.sin(rad) * (r.r + p);
+                    if (diff > 30) {
+                        let push = (distP > r.r) ? 2 : -2;
+                        let rad = Phaser.Math.DegToRad(angP);
+                        player.x = CX + Math.cos(rad) * (r.r + (12 * push));
+                        player.y = CY + Math.sin(rad) * (r.r + (12 * push));
                     }
                 }
             });
 
-            if (playerAmmo < 3 && time > lastReload + 1000) { playerAmmo++; lastReload = time; }
+            // IA Virus (Atraviesa todo)
+            if (virus && virus.active) {
+                let angV = Phaser.Math.Angle.Between(virus.x, virus.y, player.x, player.y);
+                virus.body.setVelocity(Math.cos(angV)*160, Math.sin(angV)*160);
+                virus.rotation = angV + Math.PI/2;
+
+                // Daño a Bit
+                if (Phaser.Math.Distance.Between(player.x, player.y, virus.x, virus.y) < 20) {
+                    hp -= 0.5;
+                    document.getElementById('hp').innerText = Math.floor(hp);
+                    if (hp <= 0) { hp=60; score=0; this.scene.restart(); }
+                }
+            }
+
+            // Lógica de Balas Manual (Ultra-segura)
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                let b = bullets[i];
+                if (!b.active) { bullets.splice(i, 1); continue; }
+
+                // ¿Le dio al virus?
+                if (virus && virus.active && Phaser.Math.Distance.Between(b.x, b.y, virus.x, virus.y) < 25) {
+                    virus.hp--;
+                    b.destroy();
+                    bullets.splice(i, 1);
+                    virus.setTint(0xffffff);
+                    this.time.delayedCall(100, () => { if(virus) virus.clearTint(); });
+
+                    if (virus.hp <= 0) {
+                        score++;
+                        document.getElementById('kk').innerText = score;
+                        spawnVirus(this);
+                    }
+                    continue;
+                }
+
+                // Borrar si sale de pantalla
+                if (b.x < 0 || b.x > 900 || b.y < 0 || b.y > 500) {
+                    b.destroy();
+                    bullets.splice(i, 1);
+                }
+            }
+
+            // Recarga
+            if (time > nextAmmo && ammo < 3) { ammo++; nextAmmo = time + 1000; }
         }
     </script>
 </body>
