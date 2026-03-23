@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>CORE ARENA - V.Epic</title>
+    <title>CORE ARENA - Stable Epic Version</title>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-arcade-physics.min.js"></script>
     <style>
         body { margin: 0; background-color: #020205; display: flex; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
@@ -50,23 +50,26 @@
             constructor() { super('GameScene'); }
 
             create() {
-                // GENERAR TEXTURAS EN TIEMPO REAL PARA LAS PARTÍCULAS
-                let g = this.make.graphics({x:0, y:0, add:false});
-                g.fillStyle(0x00e5ff); g.fillRect(0,0,8,8); g.generateTexture('cyan_bit', 8, 8);
-                g.clear(); g.fillStyle(0xff003c); g.fillRect(0,0,12,12); g.generateTexture('red_bit', 12, 12);
-                g.clear(); g.fillStyle(0x00ff41); g.fillRect(0,0,10,10); g.generateTexture('green_bit', 10, 10);
-                g.clear(); g.fillStyle(0xffffff); g.fillRect(0,0,20,20); g.generateTexture('white_core', 20, 20);
+                // Generación de texturas segura (verifica que no existan antes de crearlas)
+                if (!this.textures.exists('cyan_bit')) {
+                    let g = this.make.graphics({x:0, y:0, add:false});
+                    g.fillStyle(0x00e5ff); g.fillRect(0,0,8,8); g.generateTexture('cyan_bit', 8, 8);
+                    g.clear(); g.fillStyle(0xff003c); g.fillRect(0,0,12,12); g.generateTexture('red_bit', 12, 12);
+                    g.clear(); g.fillStyle(0x00ff41); g.fillRect(0,0,10,10); g.generateTexture('green_bit', 10, 10);
+                    g.destroy();
+                }
 
-                // MAPA EXPANDIDO
+                // Reinicio de UI
+                document.getElementById('hpText').innerText = "60";
+                document.getElementById('super-hint').style.display = 'none';
+
                 this.CX = 1200; this.CY = 900;
                 this.physics.world.setBounds(0, 0, 2400, 1800);
                 this.add.grid(this.CX, this.CY, 3600, 3600, 80, 80, 0x00e5ff, 0.04).setDepth(-1);
                 
-                // Anillos más grandes para compensar el mapa
                 this.rings = [{ r: 280, g: 0 }, { r: 500, g: 90 }, { r: 750, g: 180 }];
                 this.gfxWalls = this.add.graphics();
 
-                // Estado del juego
                 this.playerHP = 60; this.virusHP = 60; this.ammo = 3; this.superCharge = 0;
                 this.gameEnded = false; this.pBullets = []; this.vBullets = [];
                 this.nextAmmo = 0; this.lastVShot = 0;
@@ -84,7 +87,6 @@
                 this.vAura = this.add.circle(this.CX, this.CY, 70, 0xff003c, 0.2).setDepth(4);
                 this.vHealthBar = this.add.rectangle(this.CX, this.CY - 130, 150, 12, 0xff003c).setDepth(6);
 
-                // CÁMARA
                 this.cameras.main.setBounds(0, 0, 2400, 1800).setZoom(0.8).startFollow(this.player, true, 0.08, 0.08);
                 this.keys = this.input.keyboard.addKeys('W,A,S,D,SPACE');
                 this.input.on('pointerdown', (p) => this.fireGlitchBolt(p));
@@ -94,11 +96,10 @@
                 if (this.gameEnded) return;
                 this.drawGlitchWalls();
 
-                // Auras persiguen entidades
                 this.playerAura.setPosition(this.player.x, this.player.y);
                 this.virus.rotation += 0.01;
 
-                // Movimiento fluido
+                // Movimiento
                 let cursors = this.input.keyboard.createCursorKeys();
                 this.player.body.setVelocity(0);
                 let speed = 480;
@@ -107,124 +108,7 @@
                 if (this.keys.W.isDown || cursors.up.isDown) this.player.body.setVelocityY(-speed);
                 else if (this.keys.S.isDown || cursors.down.isDown) this.player.body.setVelocityY(speed);
 
-                // Colisiones Muros
+                // Colisión Muros
                 let d = Phaser.Math.Distance.Between(this.player.x, this.player.y, this.CX, this.CY);
                 let ang = Phaser.Math.Angle.Between(this.CX, this.CY, this.player.x, this.player.y);
-                let deg = Phaser.Math.Angle.WrapDegrees(Phaser.Math.RadToDeg(ang));
-                this.rings.forEach(r => {
-                    if (Math.abs(d - r.r) < 30) {
-                        let diff = Math.abs(deg - r.g);
-                        if (diff > 180) diff = 360 - diff;
-                        if (diff > 45) {
-                            let push = (d > r.r) ? r.r + 31 : r.r - 31;
-                            this.player.x = this.CX + Math.cos(ang) * push;
-                            this.player.y = this.CY + Math.sin(ang) * push;
-                        }
-                    }
-                });
-
-                if (Phaser.Input.Keyboard.JustDown(this.keys.SPACE) && this.superCharge >= 10) this.fireSuper();
-                if (time > this.nextAmmo && this.ammo < 3) { this.ammo++; this.nextAmmo = time + 700; }
-
-                // IA Virus (Patrón en Espiral)
-                if (this.virus.active && time > this.lastVShot + 1200) {
-                    this.lastVShot = time;
-                    for(let i=0; i<3; i++) {
-                        let vb = this.add.rectangle(this.CX, this.CY, 16, 16, 0xff003c).setStrokeStyle(2, 0xffffff);
-                        let a = Phaser.Math.Angle.Between(this.CX, this.CY, this.player.x, this.player.y) + ((i-1)*0.3);
-                        vb.vx = Math.cos(a) * 11; vb.vy = Math.sin(a) * 11;
-                        
-                        let trail = this.add.particles(0, 0, 'red_bit', { speed: 10, scale: {start: 1, end: 0}, alpha: {start: 0.5, end: 0}, lifespan: 300, blendMode: 'ADD' });
-                        trail.startFollow(vb); vb.trail = trail;
-                        this.vBullets.push(vb);
-                    }
-                }
-
-                // Balas Jugador (Glitch Bolt)
-                this.pBullets.forEach((b, i) => {
-                    // Movimiento con vibración glitch
-                    b.x += b.vx + (Math.random()*4-2); 
-                    b.y += b.vy + (Math.random()*4-2);
-                    b.rotation += 0.3;
-                    
-                    if (this.virus.active && Phaser.Math.Distance.Between(b.x, b.y, this.CX, this.CY) < 70) {
-                        this.hitBoss(b);
-                        b.trail.destroy(); b.destroy(); this.pBullets.splice(i, 1);
-                    } else if (b.x < 0 || b.x > 2400 || b.y < 0 || b.y > 1800) {
-                        b.trail.destroy(); b.destroy(); this.pBullets.splice(i, 1);
-                    }
-                });
-
-                // Balas Virus
-                this.vBullets.forEach((vb, i) => {
-                    vb.x += vb.vx; vb.y += vb.vy; vb.rotation -= 0.15;
-                    if (Phaser.Math.Distance.Between(vb.x, vb.y, this.player.x, this.player.y) < 30) {
-                        this.hitPlayer(vb);
-                        vb.trail.destroy(); vb.destroy(); this.vBullets.splice(i, 1);
-                    }
-                });
-
-                // Update UI Bars
-                this.pHealthBar.setPosition(this.player.x, this.player.y - 45).width = (this.playerHP/60)*50;
-                this.pSuperBar.setPosition(this.player.x, this.player.y - 36).width = (this.superCharge/10)*50;
-            }
-
-            drawGlitchWalls() {
-                this.gfxWalls.clear();
-                this.rings.forEach(r => {
-                    this.gfxWalls.lineStyle(35, 0x00e5ff, 0.08).beginPath().arc(this.CX, this.CY, r.r, Phaser.Math.DegToRad(r.g + 45), Phaser.Math.DegToRad(r.g + 315)).strokePath();
-                    this.gfxWalls.lineStyle(18, 0x00e5ff, 0.8).beginPath().arc(this.CX, this.CY, r.r, Phaser.Math.DegToRad(r.g + 40), Phaser.Math.DegToRad(r.g + 320)).strokePath();
-                    // Interferencia severa
-                    if (Math.random() > 0.8) {
-                        this.gfxWalls.lineStyle(6, 0xffffff, 0.8).beginPath().arc(this.CX, this.CY, r.r + (Math.random()*12-6), Phaser.Math.DegToRad(r.g + 40), Phaser.Math.DegToRad(r.g + 320)).strokePath();
-                    }
-                });
-            }
-
-            fireGlitchBolt(p) {
-                if (this.ammo > 0 && !this.gameEnded) {
-                    this.ammo--;
-                    let pWorld = p.positionToCamera(this.cameras.main);
-                    
-                    let b = this.add.rectangle(this.player.x, this.player.y, 20, 8, 0xffffff).setStrokeStyle(3, 0x00e5ff);
-                    let a = Phaser.Math.Angle.Between(this.player.x, this.player.y, pWorld.x, pWorld.y);
-                    
-                    // VELOCIDAD REDUCIDA
-                    b.vx = Math.cos(a) * 14; b.vy = Math.sin(a) * 14;
-                    b.setRotation(a);
-
-                    // Emisor de partículas para la estela épica
-                    let trail = this.add.particles(0, 0, 'cyan_bit', {
-                        speed: {min: 10, max: 40}, scale: {start: 1.5, end: 0},
-                        alpha: {start: 0.8, end: 0}, blendMode: 'ADD', lifespan: 400
-                    });
-                    trail.startFollow(b);
-                    b.trail = trail;
-                    this.pBullets.push(b);
-                }
-            }
-
-            hitBoss(b) {
-                this.showDmg(this.CX, this.CY, "-1", "#00e5ff", "40px");
-                this.cameras.main.shake(100, 0.01);
-                
-                // Flash blanco al recibir daño
-                this.virus.setFillStyle(0xffffff);
-                this.time.delayedCall(50, () => this.virus.setFillStyle(0xff003c));
-
-                // Partículas de impacto
-                this.add.particles(b.x, b.y, 'cyan_bit', { speed: 300, scale: {start: 1, end: 0}, lifespan: 400, quantity: 10, emitting: false }).explode();
-
-                this.virusHP--;
-                this.vHealthBar.width = (this.virusHP / 60) * 150;
-                
-                if (this.superCharge < 10) { 
-                    this.superCharge++; 
-                    if(this.superCharge >= 10) document.getElementById('super-hint').style.display = 'inline';
-                }
-                if (this.virusHP <= 0) this.win();
-            }
-
-            hitPlayer(vb) {
-                this.showDmg(this.player.x, this.player.y, "-10", "#ff003c", "50px");
-                this.cameras.main.shake(250, 0.02);
+                let deg = Phaser.Math.Angle.WrapDegrees(Phaser
