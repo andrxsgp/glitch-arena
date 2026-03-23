@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>CORE ARENA - Pathfinding Fix</title>
+    <title>CORE ARENA - Orbital AI</title>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-arcade-physics.min.js"></script>
     <style>
         body { margin: 0; background-color: #050505; color: #00ff41; font-family: 'Courier New', monospace; overflow: hidden; display: flex; flex-direction: column; align-items: center; }
@@ -89,8 +89,7 @@
         function spawnVirus(scene) {
             let v = scene.add.triangle(CX, CY, 0, 24, 12, 0, 24, 24, 0xff003c);
             scene.physics.add.existing(v);
-            v.body.setCircle(10); // Radio un poco más pequeño para no atascarse
-            v.currentPathIndex = 0; 
+            v.body.setCircle(12);
             viruses.add(v);
         }
 
@@ -98,7 +97,7 @@
             gfx.clear();
             gfx.lineStyle(6, 0x00ff41, 1);
             rings.forEach(ring => {
-                let start = Phaser.Math.DegToRad(ring.gap + 40); // Puerta un poco más ancha
+                let start = Phaser.Math.DegToRad(ring.gap + 40);
                 let end = Phaser.Math.DegToRad(ring.gap + 320);
                 gfx.beginPath(); gfx.arc(CX, CY, ring.r, start, end, false); gfx.strokePath();
             });
@@ -109,40 +108,42 @@
             if (wasd.W.isDown || cursors.up.isDown) player.body.setVelocityY(-340);
             else if (wasd.S.isDown || cursors.down.isDown) player.body.setVelocityY(340);
 
-            // Regeneración Bit (15 HP / 4s calma)
             if (time - lastActionTime > 4000 && playerHP < 60) {
                 playerHP = Math.min(60, playerHP + 15);
                 lastActionTime = time;
             }
             document.getElementById('hpText').innerText = Math.floor(playerHP);
 
-            // IA VIRUS: NAVEGACIÓN POR PASOS
+            // --- NUEVA IA ORBITAL ---
             viruses.getChildren().forEach(v => {
-                const dV = Phaser.Math.Distance.Between(v.x, v.y, CX, CY);
-                const dP = Phaser.Math.Distance.Between(player.x, player.y, CX, CY);
+                const distV = Phaser.Math.Distance.Between(v.x, v.y, CX, CY);
+                const distP = Phaser.Math.Distance.Between(player.x, player.y, CX, CY);
+                const angleV = Phaser.Math.Angle.WrapDegrees(Phaser.Math.RadToDeg(Phaser.Math.Angle.Between(CX, CY, v.x, v.y)));
                 
-                // Encontrar anillo del virus y del jugador
-                let vR = rings.findIndex(r => dV < r.r + 20);
-                let pR = rings.findIndex(r => dP < r.r + 20);
+                // Encontrar anillo actual del virus
+                let vRing = rings.slice().reverse().find(r => distV > r.r - 25);
+                let pRing = rings.slice().reverse().find(r => distP > r.r - 25);
 
-                let target = { x: player.x, y: player.y };
-
-                // Si no están en el mismo pasillo, el virus DEBE ir a la puerta más cercana para avanzar
-                if (vR !== pR && vR !== -1) {
-                    let angle = Phaser.Math.DegToRad(rings[vR].gap);
-                    target.x = CX + Math.cos(angle) * rings[vR].r;
-                    target.y = CY + Math.sin(angle) * rings[vR].r;
+                if (vRing && vRing !== pRing) {
+                    // El virus está en un anillo diferente: buscar el GAP
+                    let diffAngle = Phaser.Math.Angle.WrapDegrees(angleV - vRing.gap);
                     
-                    // Si ya está en la puerta, que pase a la siguiente capa
-                    if (Phaser.Math.Distance.Between(v.x, v.y, target.x, target.y) < 40) {
-                        let factor = (dP > dV) ? 1.2 : 0.8; // ¿Hacia afuera o hacia adentro?
-                        target.x = CX + Math.cos(angle) * (rings[vR].r * factor);
-                        target.y = CY + Math.sin(angle) * (rings[vR].r * factor);
+                    if (Math.abs(diffAngle) < 15) {
+                        // Está en la puerta: Moverse radialmente (hacia adentro o afuera)
+                        let speed = (distP > distV) ? 200 : -200;
+                        let rad = Phaser.Math.DegToRad(angleV);
+                        v.body.setVelocity(Math.cos(rad) * speed, Math.sin(rad) * speed);
+                    } else {
+                        // No está en la puerta: Orbitar el anillo
+                        let orbitSpeed = (diffAngle > 0) ? -200 : 200;
+                        let tangent = Phaser.Math.DegToRad(angleV + 90);
+                        v.body.setVelocity(Math.cos(tangent) * orbitSpeed, Math.sin(tangent) * orbitSpeed);
                     }
+                } else {
+                    // Mismo anillo o zona libre: Persecución directa
+                    this.physics.moveToObject(v, player, 230);
                 }
-
-                this.physics.moveTo(v, target.x, target.y, 220);
-                v.rotation = Phaser.Math.Angle.Between(v.x, v.y, target.x, target.y) + Math.PI/2;
+                v.rotation = Phaser.Math.Angle.Between(0, 0, v.body.velocity.x, v.body.velocity.y) + Math.PI/2;
             });
 
             // Colisiones Físicas
