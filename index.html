@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>CORE ARENA - Triple Hit Virus</title>
+    <title>CORE ARENA - Bug Fix Damage</title>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-arcade-physics.min.js"></script>
     <style>
         body { margin: 0; background-color: #050505; color: #00ff41; font-family: 'Courier New', monospace; overflow: hidden; display: flex; flex-direction: column; align-items: center; }
@@ -14,7 +14,6 @@
     <div class="ui-container">
         <h1 style="margin:0;">[ CORE ARENA ]</h1>
         <p style="margin:5px;">Súper: <span id="sCount">0</span>/5 | HP: <span id="hpText">60</span>/60</p>
-        <small style="color: #00e5ff;">INFO: Los virus requieren 3 disparos para ser eliminados</small>
     </div>
 
     <script>
@@ -40,9 +39,7 @@
         function preload() {}
 
         function create() {
-            playerHP = 60;
-            kills = 0;
-            playerAmmo = 3;
+            playerHP = 60; kills = 0; playerAmmo = 3;
             document.getElementById('sCount').innerText = "0";
             document.getElementById('hpText').innerText = "60";
 
@@ -61,25 +58,33 @@
             healthBar = this.add.rectangle(0, 0, 40, 5, 0x00ff00).setDepth(20);
             for(let i=0; i<3; i++) ammoBars[i] = this.add.rectangle(0, 0, 10, 4, 0x00e5ff).setDepth(20);
 
-            // SISTEMA DE DAÑO A VIRUS (3 TOQUES)
-            this.physics.add.overlap(balas, viruses, (b, v) => {
-                b.destroy(); // La bala siempre se destruye
+            // COLISIÓN BALA-VIRUS (SIN CONGELAMIENTOS)
+            this.physics.add.overlap(balas, viruses, (bala, virus) => {
+                // Desactivamos la bala inmediatamente para evitar múltiples impactos en un solo frame
+                bala.destroy(); 
                 
-                v.hp -= 1; // Restar vida al virus
-                v.setTint(0xffffff); // Feedback visual: parpadeo blanco
-                this.time.delayedCall(100, () => { if(v.active) v.clearTint(); });
+                // Procesar daño al virus
+                virus.hp -= 1;
+                virus.setTint(0xffffff);
+                
+                // Pequeño retroceso al ser impactado para feedback
+                const angle = Phaser.Math.Angle.Between(player.x, player.y, virus.x, virus.y);
+                virus.x += Math.cos(angle) * 10;
+                virus.y += Math.sin(angle) * 10;
 
-                if (v.hp <= 0) {
-                    v.destroy();
+                this.time.delayedCall(100, () => { if(virus.active) virus.clearTint(); });
+
+                if (virus.hp <= 0) {
+                    virus.destroy();
                     kills = Math.min(5, kills + 1);
                     document.getElementById('sCount').innerText = kills;
-                    this.time.delayedCall(1200, () => spawnVirus(this));
+                    this.time.delayedCall(1000, () => spawnVirus(this));
                 }
             });
 
             this.physics.add.overlap(player, viruses, (p, v) => {
                 if (playerHP > 0) {
-                    playerHP -= 0.6; 
+                    playerHP -= 0.6;
                     lastActionTime = this.time.now;
                     if(playerHP <= 0) {
                         playerHP = 0;
@@ -100,7 +105,8 @@
                     let b = this.add.circle(player.x, player.y, 5, 0x00e5ff);
                     balas.add(b);
                     this.physics.moveTo(b, p.x, p.y, 750);
-                    this.time.delayedCall(500, () => { if(b.active) b.destroy(); });
+                    // Las balas se autodestruyen si no dan a nada para limpiar memoria
+                    this.time.delayedCall(800, () => { if(b.active) b.destroy(); });
                 }
             });
 
@@ -112,10 +118,7 @@
             v.setAlpha(0.7);
             scene.physics.add.existing(v);
             v.body.setCircle(12);
-            
-            // PROPIEDAD DE VIDA
             v.hp = 3; 
-            
             viruses.add(v);
         }
 
@@ -143,10 +146,11 @@
             document.getElementById('hpText').innerText = Math.max(0, Math.floor(playerHP));
 
             viruses.getChildren().forEach(v => {
-                this.physics.moveToObject(v, player, 190);
+                this.physics.moveToObject(v, player, 185);
                 v.rotation = Phaser.Math.Angle.Between(v.x, v.y, player.x, player.y) + Math.PI/2;
             });
 
+            // Colisiones de muros solo para Bit y Balas
             [player, ...balas.getChildren()].forEach(obj => {
                 if(!obj || !obj.body) return;
                 const d = Phaser.Math.Distance.Between(obj.x, obj.y, CX, CY);
@@ -162,7 +166,7 @@
                                 obj.x = CX + Math.cos(rad) * (r.r + (24 * p));
                                 obj.y = CY + Math.sin(rad) * (r.r + (24 * p));
                             } else {
-                                obj.destroy();
+                                obj.destroy(); 
                             }
                         }
                     }
