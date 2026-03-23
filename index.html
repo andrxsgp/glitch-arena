@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>CORE ARENA - Relentless Hunter AI</title>
+    <title>CORE ARENA - Ghost Virus</title>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-arcade-physics.min.js"></script>
     <style>
         body { margin: 0; background-color: #050505; color: #00ff41; font-family: 'Courier New', monospace; overflow: hidden; display: flex; flex-direction: column; align-items: center; }
@@ -14,6 +14,7 @@
     <div class="ui-container">
         <h1 style="margin:0;">[ CORE ARENA ]</h1>
         <p style="margin:5px;">Súper: <span id="sCount">0</span>/5 | HP: <span id="hpText">60</span>/60</p>
+        <small style="color: #ff003c;">ADVERTENCIA: Virus detectado con fase cuántica (Atraviesa muros)</small>
     </div>
 
     <script>
@@ -88,8 +89,9 @@
 
         function spawnVirus(scene) {
             let v = scene.add.triangle(CX, CY, 0, 24, 12, 0, 24, 24, 0xff003c);
+            v.setAlpha(0.7); // Efecto fantasmagórico
             scene.physics.add.existing(v);
-            v.body.setCircle(10);
+            v.body.setCircle(12);
             viruses.add(v);
         }
 
@@ -114,37 +116,14 @@
             }
             document.getElementById('hpText').innerText = Math.floor(playerHP);
 
-            // IA VIRUS MEJORADA (DESLIZAMIENTO TANGENCIAL)
+            // IA VIRUS: PERSECUCIÓN TOTAL (IGNORA MUROS)
             viruses.getChildren().forEach(v => {
-                const distV = Phaser.Math.Distance.Between(v.x, v.y, CX, CY);
-                const angleV = Phaser.Math.Angle.WrapDegrees(Phaser.Math.RadToDeg(Phaser.Math.Angle.Between(CX, CY, v.x, v.y)));
-                
-                let vx = player.x - v.x;
-                let vy = player.y - v.y;
-                let mag = Math.sqrt(vx*vx + vy*vy);
-                vx /= mag; vy /= mag;
-
-                // Detectar si el movimiento hacia el jugador chocaría con un muro
-                rings.forEach(r => {
-                    if (Math.abs(distV - r.r) < 25) { // Si el virus está cerca de un anillo
-                        let diff = Math.abs(angleV - r.gap);
-                        if (diff > 180) diff = 360 - diff;
-                        
-                        if (diff > 35) { // Hay muro
-                            // Forzar movimiento lateral (tangente al círculo) para encontrar la salida
-                            let tangentAngle = Phaser.Math.DegToRad(angleV + (angleV < r.gap ? -90 : 90));
-                            vx = Math.cos(tangentAngle);
-                            vy = Math.sin(tangentAngle);
-                        }
-                    }
-                });
-
-                v.body.setVelocity(vx * 230, vy * 230);
-                v.rotation = Phaser.Math.Angle.Between(0, 0, vx, vy) + Math.PI/2;
+                this.physics.moveToObject(v, player, 200); // Un poco más lento que Bit para compensar que atraviesa muros
+                v.rotation = Phaser.Math.Angle.Between(v.x, v.y, player.x, player.y) + Math.PI/2;
             });
 
-            // Colisiones Físicas
-            [player, ...viruses.getChildren()].forEach(obj => {
+            // Colisiones Físicas SOLO PARA BIT Y BALAS
+            [player, ...balas.getChildren()].forEach(obj => {
                 if(!obj || !obj.body) return;
                 const d = Phaser.Math.Distance.Between(obj.x, obj.y, CX, CY);
                 const a = Phaser.Math.Angle.WrapDegrees(Phaser.Math.RadToDeg(Phaser.Math.Angle.Between(CX, CY, obj.x, obj.y)));
@@ -153,10 +132,14 @@
                         let diff = Math.abs(a - r.gap);
                         if (diff > 180) diff = 360 - diff;
                         if (diff > 35) {
-                            const p = (d > r.r) ? 1 : -1;
-                            const rad = Phaser.Math.DegToRad(a);
-                            obj.x = CX + Math.cos(rad) * (r.r + (24 * p));
-                            obj.y = CY + Math.sin(rad) * (r.r + (24 * p));
+                            if (obj === player) {
+                                const p = (d > r.r) ? 1 : -1;
+                                const rad = Phaser.Math.DegToRad(a);
+                                obj.x = CX + Math.cos(rad) * (r.r + (24 * p));
+                                obj.y = CY + Math.sin(rad) * (r.r + (24 * p));
+                            } else {
+                                obj.destroy(); // Balas mueren al tocar muros
+                            }
                         }
                     }
                 });
