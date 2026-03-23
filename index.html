@@ -2,154 +2,160 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>CORE ARENA - DEBUG MODE</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.60.0/phaser.min.js"></script>
+    <title>CORE ARENA - FINAL GLITCH</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-arcade-physics.min.js"></script>
     <style>
-        body { margin: 0; background: #050505; color: #00ff41; font-family: monospace; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
-        #debug-log { position: absolute; top: 10px; left: 10px; font-size: 12px; color: red; z-index: 1000; pointer-events: none; }
-        canvas { border: 2px solid #00ff41; box-shadow: 0 0 20px #00ff41; }
+        body { margin: 0; background-color: #020205; display: flex; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
+        #game-ui { font-family: 'Courier New', monospace; position: absolute; top: 10px; width: 100%; z-index: 100; text-align: center; pointer-events: none; color: #00ff41; }
     </style>
 </head>
 <body>
-    <div id="debug-log"></div>
-    <div id="ui" style="position:fixed; top:20px; width:100%; text-align:center; z-index:10; display:none; pointer-events:none;">
-        <h2 id="stats">BIT: 100% | VIRUS: 100%</h2>
+    <div id="game-ui">
+        <h1 style="margin:0; text-shadow: 0 0 10px #00ff41;">[ CORE ARENA ]</h1>
+        <p style="font-weight: bold;">INTEGRITY: <span id="hpText">60</span>% | <span id="super-hint" style="color:#ff00ff; display:none;">SINGULARITY READY [SPACE]</span></p>
     </div>
 
     <script>
-        // Sistema de captura de errores para decirte QUÉ pasa exactamente
-        window.onerror = function(msg, url, line) {
-            document.getElementById('debug-log').innerHTML += `<p>ERROR: ${msg} (Línea: ${line})</p>`;
-        };
+        class MainScene extends Phaser.Scene {
+            constructor() { super('MainScene'); }
 
-        const config = {
-            type: Phaser.CANVAS, // Forzamos modo básico para máxima compatibilidad
-            width: 800,
-            height: 600,
-            backgroundColor: '#020205',
-            parent: document.body,
-            physics: { default: 'arcade', arcade: { debug: false } },
-            scene: { preload: preload, create: create, update: update }
-        };
+            create() {
+                // Configuracion Mapa
+                this.W = 2400; this.H = 1800;
+                this.CX = 1200; this.CY = 900;
+                this.physics.world.setBounds(0, 0, this.W, this.H);
+                this.add.grid(this.CX, this.CY, 3600, 3600, 80, 80, 0x00e5ff, 0.05).setDepth(-1);
 
-        let game;
-        try {
-            game = new Phaser.Game(config);
-        } catch(e) {
-            document.getElementById('debug-log').innerHTML = "Fallo crítico al iniciar Phaser: " + e.message;
-        }
+                // Jugador (Bit)
+                this.player = this.add.container(this.CX + 600, this.CY);
+                let pBody = this.add.rectangle(0, 0, 30, 30, 0x00ff41).setStrokeStyle(2, 0xffffff);
+                this.player.add(pBody);
+                this.physics.add.existing(this.player);
+                this.player.body.setCollideWorldBounds(true);
 
-        let player, virus, cursors, bullets, vBullets, spaceBar;
-        let pHP = 100, vHP = 100, superCharge = 0;
-
-        function preload() {
-            // No cargamos imágenes externas para evitar bloqueos de seguridad (CORS)
-        }
-
-        function create() {
-            document.getElementById('ui').style.display = 'block';
-            
-            // Creamos al jugador (BIT)
-            player = this.add.rectangle(600, 300, 30, 30, 0x00ff41);
-            this.physics.add.existing(player);
-            player.body.setCollideWorldBounds(true);
-
-            // Creamos al Jefe (VIRUS)
-            virus = this.add.triangle(150, 300, 0, 100, 50, 0, 100, 100, 0xff003c);
-            this.physics.add.existing(virus);
-            virus.body.setImmovable(true);
-
-            // Grupos de disparos
-            bullets = this.physics.add.group();
-            vBullets = this.physics.add.group();
-
-            // Controles
-            cursors = this.input.keyboard.createCursorKeys();
-            spaceBar = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
-
-            // Colisiones: Bala de Bit golpea al Virus
-            this.physics.add.overlap(bullets, virus, (v, b) => {
-                b.destroy();
-                vHP -= 2;
-                superCharge = Math.min(100, superCharge + 5);
-                updateUI();
+                // Jefe (Virus)
+                this.virus = this.add.triangle(this.CX, this.CY, 0, 120, 60, 0, 120, 120, 0xff003c).setDepth(5);
+                this.vHealthBar = this.add.rectangle(this.CX, this.CY - 150, 200, 15, 0xff003c).setDepth(6);
                 
-                // Efecto visual de golpe (Flash blanco)
+                // Variables de juego
+                this.playerHP = 60; this.virusHP = 60; this.superCharge = 0;
+                this.gameEnded = false;
+                this.bullets = this.physics.add.group();
+                this.vBullets = this.physics.add.group();
+
+                // Camara
+                this.cameras.main.setBounds(0, 0, this.W, this.H).setZoom(0.85);
+                this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
+
+                // Input
+                this.keys = this.input.keyboard.addKeys('W,A,S,D,SPACE');
+                this.input.on('pointerdown', (p) => this.fireShard(p));
+
+                // Anillos de colision (Muros estéticos)
+                this.rings = [400, 700, 1000];
+                this.gfx = this.add.graphics();
+            }
+
+            update(time) {
+                if(this.gameEnded) return;
+
+                // Dibujar anillos con "Glitch"
+                this.gfx.clear();
+                this.rings.forEach(r => {
+                    this.gfx.lineStyle(15, 0x00e5ff, 0.1).strokeCircle(this.CX, this.CY, r);
+                    if(Math.random() > 0.9) {
+                        this.gfx.lineStyle(2, 0xffffff, 0.8).beginPath().arc(this.CX, this.CY, r, 0, Math.PI/2).strokePath();
+                    }
+                });
+
+                // Movimiento Bit
+                this.player.body.setVelocity(0);
+                let speed = 500;
+                if (this.keys.A.isDown) this.player.body.setVelocityX(-speed);
+                else if (this.keys.D.isDown) this.player.body.setVelocityX(speed);
+                if (this.keys.W.isDown) this.player.body.setVelocityY(-speed);
+                else if (this.keys.S.isDown) this.player.body.setVelocityY(speed);
+
+                // IA Virus (Disparos en ráfaga)
+                if (time % 1200 < 20) this.virusAttack();
+
+                // Lógica del Super
+                if (Phaser.Input.Keyboard.JustDown(this.keys.SPACE) && this.superCharge >= 10) this.useSuper();
+
+                // Rotar Virus
+                this.virus.rotation += 0.02;
+            }
+
+            fireShard(p) {
+                if (this.gameEnded) return;
+                let pWorld = p.positionToCamera(this.cameras.main);
+                let angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, pWorld.x, pWorld.y);
+                
+                // El Proyectil "Epic"
+                let shard = this.add.rectangle(this.player.x, this.player.y, 40, 6, 0xffffff).setRotation(angle);
+                shard.setStrokeStyle(2, 0x00e5ff);
+                this.physics.add.existing(shard);
+                this.physics.velocityFromRotation(angle, 700, shard.body.velocity);
+                this.bullets.add(shard);
+
+                // Estela de fantasmas
+                this.time.addEvent({
+                    delay: 50, repeat: 5,
+                    callback: () => {
+                        if(!shard.active) return;
+                        let ghost = this.add.rectangle(shard.x, shard.y, 40, 6, 0x00e5ff, 0.3).setRotation(angle);
+                        this.tweens.add({ targets: ghost, alpha: 0, duration: 300, onComplete: () => ghost.destroy() });
+                    }
+                });
+
+                this.physics.add.overlap(shard, this.virus, () => {
+                    this.hitVirus(shard);
+                });
+            }
+
+            virusAttack() {
+                for(let i = -1; i <= 1; i++) {
+                    let angle = Phaser.Math.Angle.Between(this.CX, this.CY, this.player.x, this.player.y) + (i * 0.2);
+                    let vb = this.add.rectangle(this.CX, this.CY, 15, 15, 0xff003c).setStrokeStyle(2, 0xffffff);
+                    this.physics.add.existing(vb);
+                    this.physics.velocityFromRotation(angle, 400, vb.body.velocity);
+                    this.vBullets.add(vb);
+
+                    this.physics.add.overlap(vb, this.player, () => {
+                        this.hitPlayer(vb);
+                    });
+                }
+            }
+
+            hitVirus(bullet) {
+                bullet.destroy();
+                this.virusHP--;
+                this.superCharge = Math.min(10, this.superCharge + 1);
+                this.vHealthBar.width = (this.virusHP / 60) * 200;
+                
+                // Feedback visual de golpe
+                this.virus.setFillStyle(0xffffff);
+                this.time.delayedCall(50, () => this.virus.setFillStyle(0xff003c));
                 this.cameras.main.shake(100, 0.01);
-                if(vHP <= 0) alert("SISTEMA PURGADO");
-            });
 
-            // Colisiones: Bala de Virus golpea a Bit
-            this.physics.add.overlap(vBullets, player, (p, b) => {
-                b.destroy();
-                pHP -= 10;
-                updateUI();
-                this.cameras.main.shake(200, 0.03);
-                if(pHP <= 0) { alert("KERNEL PANIC - GAME OVER"); location.reload(); }
-            });
-
-            // Disparo automático del Virus cada 1.5 segundos
-            this.time.addEvent({
-                delay: 1500,
-                callback: virusShoot,
-                callbackScope: this,
-                loop: true
-            });
-        }
-
-        function update() {
-            // Movimiento
-            player.body.setVelocity(0);
-            if (cursors.left.isDown) player.body.setVelocityX(-350);
-            if (cursors.right.isDown) player.body.setVelocityX(350);
-            if (cursors.up.isDown) player.body.setVelocityY(-350);
-            if (cursors.down.isDown) player.body.setVelocityY(350);
-
-            // Disparar con click
-            if (this.input.activePointer.isDown && this.time.now > (this.lastFired || 0)) {
-                shoot.call(this);
-                this.lastFired = this.time.now + 300;
+                if(this.superCharge >= 10) document.getElementById('super-hint').style.display = 'inline';
+                if(this.virusHP <= 0) this.win();
             }
 
-            // Super Ataque
-            if (Phaser.Input.Keyboard.JustDown(spaceBar) && superCharge >= 100) {
-                useSuper.call(this);
+            hitPlayer(bullet) {
+                bullet.destroy();
+                this.playerHP -= 10;
+                document.getElementById('hpText').innerText = this.playerHP;
+                this.cameras.main.shake(200, 0.02);
+                
+                if(this.playerHP <= 0) this.lose();
             }
-        }
 
-        function shoot() {
-            let b = this.add.rectangle(player.x, player.y, 20, 10, 0x00e5ff);
-            this.physics.add.existing(b);
-            // El ataque ahora es un "Glitch Bolt" (va rotando y vibra)
-            b.body.setVelocityX(-600);
-            this.tweens.add({
-                targets: b,
-                angle: 360,
-                duration: 500,
-                repeat: -1
-            });
-            bullets.add(b);
-        }
+            useSuper() {
+                this.superCharge = 0;
+                document.getElementById('super-hint').style.display = 'none';
+                this.cameras.main.flash(500, 255, 255, 255);
+                this.cameras.main.shake(600, 0.05);
 
-        function virusShoot() {
-            let b = this.add.circle(virus.x, virus.y, 10, 0xff003c);
-            this.physics.add.existing(b);
-            this.physics.moveToObject(b, player, 300);
-            vBullets.add(b);
-        }
-
-        function useSuper() {
-            superCharge = 0;
-            updateUI();
-            this.cameras.main.flash(500, 255, 255, 255);
-            vHP -= 20;
-            updateUI();
-        }
-
-        function updateUI() {
-            let s = superCharge >= 100 ? "!! SUPER LISTO [ESPACIO] !!" : "";
-            document.getElementById('stats').innerText = `BIT: ${pHP}% | VIRUS: ${vHP}% ${s}`;
-        }
-    </script>
-</body>
-</html>
+                // Rayo láser de singularidad
+                let beam = this.add.
