@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>CORE ARENA - Full System</title>
+    <title>CORE ARENA - Glitch Transition Fixed</title>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-arcade-physics.min.js"></script>
     <style>
         body { margin: 0; background-color: #020205; display: flex; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
@@ -12,7 +12,7 @@
 <body>
     <div id="game-ui">
         <h1 style="margin:0; color:#00ff41; text-shadow: 0 0 10px #00ff41;">[ CORE ARENA ]</h1>
-        <p style="color:#00e5ff; font-weight: bold;">BIT_HP: <span id="hpText">60</span>% | <span id="super-hint" style="color:#ff00ff; display:none; text-shadow: 0 0 10px #ff00ff;">!! SÚPER CARGADO [ESPACIO] !!</span></p>
+        <p style="color:#00e5ff; font-weight: bold;">BIT_HP: <span id="hpText">60</span>% | <span id="super-hint" style="color:#ff00ff; display:none;">!! SÚPER LISTO [ESPACIO] !!</span></p>
     </div>
 
     <script>
@@ -20,12 +20,40 @@
             constructor() { super('MenuScene'); }
             create() {
                 const { width, height } = this.scale;
-                this.add.text(width/2, height/2 - 50, 'CORE ARENA', { fontSize: '80px', color: '#00ff41', fontFamily: 'Courier New', fontWeight: 'bold' }).setOrigin(0.5);
+                this.gfx = this.add.graphics().setDepth(10);
+                
+                this.title = this.add.text(width/2, height/2 - 50, 'CORE ARENA', { 
+                    fontSize: '80px', color: '#00ff41', fontFamily: 'Courier New', fontWeight: 'bold' 
+                }).setOrigin(0.5);
+
                 let btn = this.add.rectangle(width/2, height/2 + 50, 300, 60, 0x00ff41, 0.1).setStrokeStyle(2, 0x00ff41).setInteractive({useHandCursor:true});
-                this.add.text(width/2, height/2 + 50, 'INICIAR SISTEMA', { fontSize: '24px', color: '#00ff41', fontFamily: 'Courier New' }).setOrigin(0.5);
+                let btnText = this.add.text(width/2, height/2 + 50, 'INICIAR SISTEMA', { fontSize: '24px', color: '#00ff41', fontFamily: 'Courier New' }).setOrigin(0.5);
+                
                 btn.on('pointerdown', () => {
-                    document.getElementById('game-ui').style.display = 'block';
-                    this.scene.start('GameScene');
+                    // --- EFECTO DE GLITCH DE TRANSICIÓN ---
+                    btn.setVisible(false);
+                    btnText.setVisible(false);
+                    this.cameras.main.shake(800, 0.04);
+                    
+                    this.time.addEvent({
+                        delay: 50,
+                        repeat: 16,
+                        callback: () => {
+                            this.gfx.clear();
+                            for(let i=0; i<15; i++) {
+                                const colors = [0x00ff41, 0xffffff, 0xff003c, 0x00e5ff];
+                                this.gfx.fillStyle(colors[Math.floor(Math.random()*colors.length)], 0.6);
+                                this.gfx.fillRect(0, Math.random()*height, width, Math.random()*60);
+                            }
+                            this.title.setX(width/2 + Math.random()*20 - 10);
+                            this.title.setTint(Math.random()*0xffffff);
+                        }
+                    });
+
+                    this.time.delayedCall(900, () => {
+                        document.getElementById('game-ui').style.display = 'block';
+                        this.scene.start('GameScene');
+                    });
                 });
             }
         }
@@ -34,7 +62,6 @@
             constructor() { super('GameScene'); }
 
             create() {
-                // Reset de variables
                 this.playerHP = 60; this.virusHP = 50; this.ammo = 3; this.superCharge = 0;
                 this.gameEnded = false; this.pBullets = []; this.vBullets = [];
                 this.nextAmmo = 0; this.lastVShot = 0;
@@ -45,7 +72,6 @@
                 this.gfx = this.add.graphics();
                 this.add.grid(800, 600, 2400, 2400, 64, 64, 0x00e5ff, 0.05).setDepth(-1);
 
-                // Bit y Barras
                 this.player = this.add.rectangle(this.CX + 400, this.CY, 24, 24, 0x00ff41).setDepth(10);
                 this.physics.add.existing(this.player);
                 this.pHealthBar = this.add.rectangle(0, 0, 40, 5, 0x00ff00).setDepth(20);
@@ -53,7 +79,6 @@
                 this.ammoBars = [];
                 for(let i=0; i<3; i++) this.ammoBars[i] = this.add.rectangle(0, 0, 10, 4, 0x00e5ff).setDepth(20);
 
-                // Virus
                 this.virus = this.add.triangle(this.CX, this.CY, 0, 80, 40, 0, 80, 80, 0xff003c).setDepth(5);
                 this.vHealthBar = this.add.rectangle(this.CX, this.CY - 100, 100, 10, 0xff003c).setDepth(6);
 
@@ -67,10 +92,8 @@
 
             update(time) {
                 if (this.gameEnded) return;
-
                 this.drawGlitchWalls();
 
-                // Movimiento
                 let cursors = this.input.keyboard.createCursorKeys();
                 this.player.body.setVelocity(0);
                 if (this.keys.A.isDown || cursors.left.isDown) this.player.body.setVelocityX(-400);
@@ -78,7 +101,6 @@
                 if (this.keys.W.isDown || cursors.up.isDown) this.player.body.setVelocityY(-400);
                 else if (this.keys.S.isDown || cursors.down.isDown) this.player.body.setVelocityY(400);
 
-                // Colisiones Muros
                 let d = Phaser.Math.Distance.Between(this.player.x, this.player.y, this.CX, this.CY);
                 let ang = Phaser.Math.Angle.Between(this.CX, this.CY, this.player.x, this.player.y);
                 let deg = Phaser.Math.Angle.WrapDegrees(Phaser.Math.RadToDeg(ang));
@@ -94,13 +116,9 @@
                     }
                 });
 
-                // Súper Ataque
                 if (Phaser.Input.Keyboard.JustDown(this.keys.SPACE) && this.superCharge >= 10) this.lanzarSuper();
-
-                // Recarga
                 if (time > this.nextAmmo && this.ammo < 3) { this.ammo++; this.nextAmmo = time + 1000; }
 
-                // IA Virus
                 if (this.virus.active && time > this.lastVShot + 1200) {
                     this.lastVShot = time;
                     let vb = this.add.circle(this.CX, this.CY, 10, 0xff003c).setStrokeStyle(2, 0xffffff);
@@ -109,7 +127,6 @@
                     this.vBullets.push(vb);
                 }
 
-                // Balas Jugador
                 this.pBullets.forEach((b, i) => {
                     b.x += b.vx; b.y += b.vy;
                     if (this.virus.active && Phaser.Math.Distance.Between(b.x, b.y, this.CX, this.CY) < 50) {
@@ -125,7 +142,6 @@
                     }
                 });
 
-                // Balas Virus
                 this.vBullets.forEach((vb, i) => {
                     vb.x += vb.vx; vb.y += vb.vy;
                     if (Phaser.Math.Distance.Between(vb.x, vb.y, this.player.x, this.player.y) < 25) {
@@ -138,7 +154,6 @@
                     }
                 });
 
-                // Update Barras
                 this.pHealthBar.setPosition(this.player.x, this.player.y - 35).width = (this.playerHP/60)*40;
                 this.pSuperBar.setPosition(this.player.x, this.player.y - 30).width = (this.superCharge/10)*40;
                 this.ammoBars.forEach((ab, i) => {
@@ -150,21 +165,10 @@
             drawGlitchWalls() {
                 this.gfx.clear();
                 this.rings.forEach(r => {
-                    this.gfx.lineStyle(25, 0x00e5ff, 0.1); 
-                    this.gfx.beginPath();
-                    this.gfx.arc(this.CX, this.CY, r.r, Phaser.Math.DegToRad(r.g + 45), Phaser.Math.DegToRad(r.g + 315));
-                    this.gfx.strokePath();
-
-                    this.gfx.lineStyle(15, 0x00e5ff, 0.8); 
-                    this.gfx.beginPath();
-                    this.gfx.arc(this.CX, this.CY, r.r, Phaser.Math.DegToRad(r.g + 40), Phaser.Math.DegToRad(r.g + 320));
-                    this.gfx.strokePath();
-
+                    this.gfx.lineStyle(25, 0x00e5ff, 0.1).beginPath().arc(this.CX, this.CY, r.r, Phaser.Math.DegToRad(r.g + 45), Phaser.Math.DegToRad(r.g + 315)).strokePath();
+                    this.gfx.lineStyle(15, 0x00e5ff, 0.8).beginPath().arc(this.CX, this.CY, r.r, Phaser.Math.DegToRad(r.g + 40), Phaser.Math.DegToRad(r.g + 320)).strokePath();
                     if (Math.random() > 0.85) {
-                        this.gfx.lineStyle(4, 0xffffff, 0.6);
-                        this.gfx.beginPath();
-                        this.gfx.arc(this.CX, this.CY, r.r + (Math.random()*8-4), Phaser.Math.DegToRad(r.g + 40), Phaser.Math.DegToRad(r.g + 320));
-                        this.gfx.strokePath();
+                        this.gfx.lineStyle(4, 0xffffff, 0.6).beginPath().arc(this.CX, this.CY, r.r + (Math.random()*8-4), Phaser.Math.DegToRad(r.g + 40), Phaser.Math.DegToRad(r.g + 320)).strokePath();
                     }
                 });
             }
@@ -206,9 +210,9 @@
                     p.body.setVelocity(Phaser.Math.Between(-600, 600), Phaser.Math.Between(-600, 600));
                     this.tweens.add({ targets: p, alpha: 0, scale: 0, duration: 1500, onComplete: () => p.destroy() });
                 }
-                this.virus.destroy(); this.vHealthBar.destroy();
+                this.virus.destroy();
                 this.add.text(this.CX, this.CY, 'SISTEMA PURGADO', { fontSize: '60px', color: '#00ff41', fontFamily: 'Courier New' }).setOrigin(0.5);
-                this.time.delayedCall(3000, () => { document.getElementById('game-ui').style.display = 'none'; this.scene.start('MenuScene'); });
+                this.time.delayedCall(3000, () => location.reload());
             }
 
             lose() {
@@ -222,7 +226,7 @@
                         this.player.scaleX = Math.random() * 5;
                     }
                 });
-                this.time.delayedCall(1500, () => { document.getElementById('game-ui').style.display = 'none'; this.scene.start('MenuScene'); });
+                this.time.delayedCall(1500, () => location.reload());
             }
         }
 
