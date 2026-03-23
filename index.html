@@ -2,191 +2,242 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>CORE ARENA - Fixed Walls & Death FX</title>
+    <title>CORE ARENA - System Loading</title>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-arcade-physics.min.js"></script>
     <style>
         body { margin: 0; background-color: #050505; color: #00ff41; font-family: 'Courier New', monospace; display: flex; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
         canvas { border: 2px solid #00e5ff; box-shadow: 0 0 30px #00e5ff; }
-        .ui { text-align: center; padding: 10px; pointer-events: none; position: absolute; top: 10px; width: 100%; z-index: 100; }
-        #super-hint { color: #ff00ff; font-weight: bold; display: none; text-shadow: 0 0 20px #ff00ff; font-size: 28px; }
+        #game-ui { text-align: center; padding: 10px; pointer-events: none; position: absolute; top: 10px; width: 100%; z-index: 100; display: none; }
+        #super-hint { color: #ff00ff; font-weight: bold; text-shadow: 0 0 20px #ff00ff; font-size: 28px; }
     </style>
 </head>
 <body>
-    <div class="ui">
+    <div id="game-ui">
         <h1 style="margin:0;">[ CORE ARENA ]</h1>
-        <p>BIT HP: <span id="hpText">60</span> | <span id="super-hint">¡SÚPER CARGADO! [ESPACIO]</span></p>
+        <p>BIT HP: <span id="hpText">60</span> | <span id="super-hint">¡SÚPER CARGADO!</span></p>
     </div>
 
     <script>
+        // --- ESCENA DE MENÚ ---
+        class MenuScene extends Phaser.Scene {
+            constructor() { super('MenuScene'); }
+
+            create() {
+                const { width, height } = this.scale;
+
+                // Título con estilo Glitch
+                this.add.text(width/2, height/2 - 80, 'CORE ARENA', {
+                    fontFamily: 'Courier New', fontSize: '80px', fontWeight: 'bold', color: '#00ff41'
+                }).setOrigin(0.5).setShadow(0, 0, '#00ff41', 10);
+
+                this.add.text(width/2, height/2 - 20, 'V 1.0.4 - PROTOCOL ACTIVE', {
+                    fontFamily: 'Courier New', fontSize: '18px', color: '#00e5ff'
+                }).setOrigin(0.5);
+
+                // Botón Jugar
+                let playBtn = this.add.rectangle(width/2, height/2 + 80, 250, 60, 0x00ff41, 0.1)
+                    .setInteractive({ useHandCursor: true })
+                    .setStrokeStyle(2, 0x00ff41);
+
+                let playText = this.add.text(width/2, height/2 + 80, 'INICIAR SISTEMA', {
+                    fontFamily: 'Courier New', fontSize: '24px', color: '#00ff41'
+                }).setOrigin(0.5);
+
+                // Botón Modos (Placeholder)
+                let modesBtn = this.add.rectangle(width/2, height/2 + 160, 250, 45, 0x333333, 0.5)
+                    .setInteractive({ useHandCursor: true })
+                    .setStrokeStyle(1, 0x666666);
+
+                this.add.text(width/2, height/2 + 160, 'MODOS [BLOQUEADO]', {
+                    fontFamily: 'Courier New', fontSize: '16px', color: '#666666'
+                }).setOrigin(0.5);
+
+                // Eventos del Botón
+                playBtn.on('pointerover', () => { playBtn.setFillStyle(0x00ff41, 0.3); playText.setScale(1.1); });
+                playBtn.on('pointerout', () => { playBtn.setFillStyle(0x00ff41, 0.1); playText.setScale(1); });
+                
+                playBtn.on('pointerdown', () => {
+                    document.getElementById('game-ui').style.display = 'block';
+                    this.scene.start('GameScene');
+                });
+
+                // Pequeño efecto de fondo
+                this.particles = this.add.graphics();
+            }
+
+            update() {
+                this.particles.clear();
+                this.particles.fillStyle(0x00ff41, 0.2);
+                for(let i=0; i<10; i++) {
+                    this.particles.fillRect(Math.random()*1000, Math.random()*550, 2, 20);
+                }
+            }
+        }
+
+        // --- ESCENA DE JUEGO (Lógica anterior optimizada) ---
+        class GameScene extends Phaser.Scene {
+            constructor() { super('GameScene'); }
+
+            create() {
+                // Reiniciar variables
+                this.playerHP = 60; this.virusHP = 50; this.superCharge = 0; this.ammo = 3;
+                this.gameEnded = false; this.pBullets = []; this.vBullets = [];
+                this.lastVShot = 0; this.nextAmmo = 0;
+                this.CX = 800; this.CY = 600;
+                this.rings = [{ r: 160, g: 0 }, { r: 330, g: 90 }, { r: 500, g: 180 }];
+
+                this.physics.world.setBounds(0, 0, 1600, 1200);
+                this.gfx = this.add.graphics();
+                this.keys = this.input.keyboard.addKeys('W,A,S,D,SPACE');
+
+                this.player = this.add.rectangle(this.CX + 350, this.CY, 24, 24, 0x00ff41).setDepth(10);
+                this.physics.add.existing(this.player);
+
+                this.pHealthBar = this.add.rectangle(0, 0, 40, 5, 0x00ff00).setDepth(20);
+                this.superBar = this.add.rectangle(0, 0, 40, 3, 0xff00ff).setDepth(20);
+                this.ammoBars = [];
+                for(let i=0; i<3; i++) this.ammoBars[i] = this.add.rectangle(0, 0, 10, 4, 0x00e5ff).setDepth(20);
+
+                this.virus = this.add.triangle(this.CX, this.CY, 0, 60, 30, 0, 60, 60, 0xff003c).setDepth(5);
+                this.vHealthBG = this.add.rectangle(this.CX, this.CY - 50, 60, 8, 0x330000).setDepth(4);
+                this.vHealthBar = this.add.rectangle(this.CX, this.CY - 50, 60, 8, 0xff0000).setDepth(5);
+
+                this.cameras.main.setBounds(0, 0, 1600, 1200).setZoom(0.8).startFollow(this.player, true, 0.1, 0.1);
+
+                this.input.on('pointerdown', (p) => this.shoot(p));
+            }
+
+            shoot(pointer) {
+                if (this.ammo > 0 && !this.gameEnded) {
+                    this.ammo--;
+                    let pWorld = pointer.positionToCamera(this.cameras.main);
+                    let b = this.add.circle(this.player.x, this.player.y, 5, 0x00e5ff);
+                    let ang = Phaser.Math.Angle.Between(this.player.x, this.player.y, pWorld.x, pWorld.y);
+                    b.vx = Math.cos(ang) * 18; b.vy = Math.sin(ang) * 18;
+                    this.pBullets.push(b);
+                }
+            }
+
+            update(time) {
+                if (this.gameEnded) return;
+
+                this.gfx.clear(); this.gfx.lineStyle(6, 0x00ff41);
+                this.rings.forEach(r => {
+                    this.gfx.beginPath();
+                    this.gfx.arc(this.CX, this.CY, r.r, Phaser.Math.DegToRad(r.g + 40), Phaser.Math.DegToRad(r.g + 320));
+                    this.gfx.strokePath();
+                });
+
+                // Movimiento y Colisión
+                let cursors = this.input.keyboard.createCursorKeys();
+                this.player.body.setVelocity(0);
+                if (this.keys.A.isDown || cursors.left.isDown) this.player.body.setVelocityX(-350);
+                else if (this.keys.D.isDown || cursors.right.isDown) this.player.body.setVelocityX(350);
+                if (this.keys.W.isDown || cursors.up.isDown) this.player.body.setVelocityY(-350);
+                else if (this.keys.S.isDown || cursors.down.isDown) this.player.body.setVelocityY(350);
+
+                let d = Phaser.Math.Distance.Between(this.player.x, this.player.y, this.CX, this.CY);
+                let ang = Phaser.Math.Angle.Between(this.CX, this.CY, this.player.x, this.player.y);
+                let deg = Phaser.Math.Angle.WrapDegrees(Phaser.Math.RadToDeg(ang));
+
+                this.rings.forEach(r => {
+                    if (Math.abs(d - r.r) < 12) {
+                        let diff = Math.abs(deg - r.g);
+                        if (diff > 180) diff = 360 - diff;
+                        if (diff > 38) {
+                            let tr = (d > r.r) ? r.r + 13 : r.r - 13;
+                            this.player.x = this.CX + Math.cos(ang) * tr;
+                            this.player.y = this.CY + Math.sin(ang) * tr;
+                        }
+                    }
+                });
+
+                if (Phaser.Input.Keyboard.JustDown(this.keys.SPACE) && this.superCharge >= 10) this.lanzarSuper();
+
+                // Balas Jefe
+                if (time > this.lastVShot + 1200) {
+                    this.lastVShot = time;
+                    let vb = this.add.circle(this.CX, this.CY, 8, 0xff003c);
+                    let a = Phaser.Math.Angle.Between(this.CX, this.CY, this.player.x, this.player.y);
+                    vb.vx = Math.cos(a) * 8; vb.vy = Math.sin(a) * 8;
+                    this.vBullets.push(vb);
+                }
+
+                // Colisiones Balas
+                this.pBullets.forEach((b, i) => {
+                    b.x += b.vx; b.y += b.vy;
+                    if (this.virus.active && Phaser.Math.Distance.Between(b.x, b.y, this.CX, this.CY) < 40) {
+                        b.destroy(); this.pBullets.splice(i, 1);
+                        this.virusHP--;
+                        this.showDmg(this.CX, this.CY, "-1", "#00e5ff", '35px');
+                        this.vHealthBar.width = (this.virusHP / 50) * 60;
+                        if (this.superCharge < 10) { 
+                            this.superCharge++; 
+                            if(this.superCharge >= 10) document.getElementById('super-hint').style.display = 'inline'; 
+                        }
+                        if (this.virusHP <= 0) this.win();
+                    }
+                });
+
+                this.vBullets.forEach((vb, j) => {
+                    vb.x += vb.vx; vb.y += vb.vy;
+                    if (Phaser.Math.Distance.Between(vb.x, vb.y, this.player.x, this.player.y) < 22) {
+                        this.playerHP -= 10;
+                        this.showDmg(this.player.x, this.player.y, "-10", "#ff003c", '45px');
+                        document.getElementById('hpText').innerText = Math.floor(this.playerHP);
+                        vb.destroy(); this.vBullets.splice(j, 1);
+                        if (this.playerHP <= 0) this.lose();
+                    }
+                });
+
+                // UI Bars
+                this.pHealthBar.setPosition(this.player.x, this.player.y - 30).width = (this.playerHP/60)*40;
+                this.superBar.setPosition(this.player.x, this.player.y - 25).width = (this.superCharge/10)*40;
+                this.ammoBars.forEach((ab, i) => { 
+                    ab.setPosition(this.player.x-15+(i*15), this.player.y-18); 
+                    ab.visible = (i < this.ammo); 
+                });
+                if (time > this.nextAmmo && this.ammo < 3) { this.ammo++; this.nextAmmo = time + 1000; }
+            }
+
+            showDmg(x, y, txt, col, size) {
+                let t = this.add.text(x, y - 40, txt, { fontFamily: 'Arial Black', fontSize: size, color: col }).setOrigin(0.5);
+                this.tweens.add({ targets: t, y: y - 120, alpha: 0, duration: 1000, onComplete: () => t.destroy() });
+            }
+
+            lanzarSuper() {
+                this.superCharge = 0; document.getElementById('super-hint').style.display = 'none';
+                let o = this.add.circle(this.player.x, this.player.y, 10, 0xff00ff, 0.4).setDepth(1);
+                if (Phaser.Math.Distance.Between(this.player.x, this.player.y, this.CX, this.CY) < 600) {
+                    this.virusHP -= 5;
+                    this.showDmg(this.CX, this.CY, "-5", "#ff00ff", '80px');
+                    this.vHealthBar.width = Math.max(0, (this.virusHP / 50) * 60);
+                    if (this.virusHP <= 0) this.win();
+                }
+                this.vBullets.forEach(v => v.destroy()); this.vBullets = [];
+                this.tweens.add({ targets: o, radius: 600, alpha: 0, duration: 600, onComplete: () => o.destroy() });
+            }
+
+            win() {
+                this.gameEnded = true;
+                this.virus.destroy(); this.vHealthBar.destroy();
+                this.add.text(this.player.x, this.player.y - 100, 'SISTEMA PURGADO', { fontSize: '40px', color: '#00ff41' }).setOrigin(0.5);
+                this.time.delayedCall(2000, () => location.reload());
+            }
+
+            lose() {
+                this.gameEnded = true;
+                this.cameras.main.shake(500, 0.05);
+                this.time.delayedCall(1000, () => location.reload());
+            }
+        }
+
         const config = {
             type: Phaser.AUTO, width: 1000, height: 550,
             physics: { default: 'arcade' },
-            scene: { create: create, update: update }
+            scene: [MenuScene, GameScene] // El orden importa: MenuScene carga primero
         };
-
-        const game = new Phaser.Game(config);
-        const CX = 800, CY = 600;
-        let player, virus, gfx, vHealthBar, vHealthBG, pHealthBar, superBar;
-        let pBullets = [], vBullets = [], ammoBars = [];
-        let playerHP = 60, virusHP = 50, ammo = 3, nextAmmo = 0, lastVShot = 0;
-        let superCharge = 0, gameEnded = false, keys;
-        
-        const rings = [{ r: 160, g: 0 }, { r: 330, g: 90 }, { r: 500, g: 180 }];
-
-        function create() {
-            this.physics.world.setBounds(0, 0, 1600, 1200);
-            gfx = this.add.graphics();
-            keys = this.input.keyboard.addKeys('W,A,S,D,SPACE');
-            
-            player = this.add.rectangle(CX + 350, CY, 24, 24, 0x00ff41).setDepth(10);
-            this.physics.add.existing(player);
-            
-            pHealthBar = this.add.rectangle(0, 0, 40, 5, 0x00ff00).setDepth(20);
-            superBar = this.add.rectangle(0, 0, 40, 3, 0xff00ff).setDepth(20);
-            for(let i=0; i<3; i++) ammoBars[i] = this.add.rectangle(0, 0, 10, 4, 0x00e5ff).setDepth(20);
-
-            virus = this.add.triangle(CX, CY, 0, 60, 30, 0, 60, 60, 0xff003c).setDepth(5);
-            vHealthBG = this.add.rectangle(CX, CY - 50, 60, 8, 0x330000).setDepth(4);
-            vHealthBar = this.add.rectangle(CX, CY - 50, 60, 8, 0xff0000).setDepth(5);
-
-            this.cameras.main.setBounds(0, 0, 1600, 1200).setZoom(0.8).startFollow(player, true, 0.1, 0.1);
-
-            this.input.on('pointerdown', (pointer) => {
-                if (ammo > 0 && !gameEnded) {
-                    ammo--;
-                    let pWorld = pointer.positionToCamera(this.cameras.main);
-                    let b = this.add.circle(player.x, player.y, 5, 0x00e5ff);
-                    let ang = Phaser.Math.Angle.Between(player.x, player.y, pWorld.x, pWorld.y);
-                    b.vx = Math.cos(ang) * 18; b.vy = Math.sin(ang) * 18;
-                    pBullets.push(b);
-                }
-            });
-        }
-
-        function showDamage(scene, x, y, amount, color, sizeCustom = '40px') {
-            let txt = scene.add.text(x, y - 40, amount, { 
-                fontFamily: 'Arial Black', fontSize: sizeCustom, color: color, stroke: '#000000', strokeThickness: 4
-            }).setOrigin(0.5).setDepth(100);
-            scene.tweens.add({ targets: txt, y: y - 120, alpha: 0, duration: 1000, onComplete: () => txt.destroy() });
-        }
-
-        function update(time) {
-            if (gameEnded) return;
-
-            gfx.clear(); gfx.lineStyle(6, 0x00ff41);
-            rings.forEach(r => {
-                gfx.beginPath();
-                gfx.arc(CX, CY, r.r, Phaser.Math.DegToRad(r.g + 40), Phaser.Math.DegToRad(r.g + 320));
-                gfx.strokePath();
-            });
-
-            // Movimiento
-            let cursors = this.input.keyboard.createCursorKeys();
-            player.body.setVelocity(0);
-            if (keys.A.isDown || cursors.left.isDown) player.body.setVelocityX(-350);
-            else if (keys.D.isDown || cursors.right.isDown) player.body.setVelocityX(350);
-            if (keys.W.isDown || cursors.up.isDown) player.body.setVelocityY(-350);
-            else if (keys.S.isDown || cursors.down.isDown) player.body.setVelocityY(350);
-
-            // COLISIÓN REFORZADA
-            let distToCenter = Phaser.Math.Distance.Between(player.x, player.y, CX, CY);
-            let angleToCenter = Phaser.Math.Angle.Between(CX, CY, player.x, player.y);
-            let degAngle = Phaser.Math.Angle.WrapDegrees(Phaser.Math.RadToDeg(angleToCenter));
-
-            rings.forEach(r => {
-                if (Math.abs(distToCenter - r.r) < 12) {
-                    let diff = Math.abs(degAngle - r.g);
-                    if (diff > 180) diff = 360 - diff;
-                    if (diff > 38) { // Si choca con el muro del anillo
-                        let targetR = (distToCenter > r.r) ? r.r + 13 : r.r - 13;
-                        player.x = CX + Math.cos(angleToCenter) * targetR;
-                        player.y = CY + Math.sin(angleToCenter) * targetR;
-                    }
-                }
-            });
-
-            if (Phaser.Input.Keyboard.JustDown(keys.SPACE) && superCharge >= 10) lanzarSuper(this);
-
-            if (virus && time > lastVShot + 1200) {
-                lastVShot = time;
-                let vb = this.add.circle(CX, CY, 8, 0xff003c);
-                let ang = Phaser.Math.Angle.Between(CX, CY, player.x, player.y);
-                vb.vx = Math.cos(ang) * 8; vb.vy = Math.sin(ang) * 8;
-                vBullets.push(vb);
-            }
-
-            // Balas y Daño
-            pBullets.forEach((b, i) => {
-                b.x += b.vx; b.y += b.vy;
-                if (virus && Phaser.Math.Distance.Between(b.x, b.y, CX, CY) < 40) {
-                    b.destroy(); pBullets.splice(i, 1);
-                    virusHP--;
-                    showDamage(this, CX, CY, "-1", "#00e5ff", '35px');
-                    vHealthBar.width = (virusHP / 50) * 60;
-                    if (superCharge < 10) { superCharge++; if(superCharge >= 10) document.getElementById('super-hint').style.display = 'inline'; }
-                    if (virusHP <= 0) morirVirus(this);
-                }
-            });
-
-            vBullets.forEach((vb, j) => {
-                vb.x += vb.vx; vb.y += vb.vy;
-                if (Phaser.Math.Distance.Between(vb.x, vb.y, player.x, player.y) < 22) {
-                    playerHP -= 10;
-                    showDamage(this, player.x, player.y, "-10", "#ff003c", '45px');
-                    document.getElementById('hpText').innerText = Math.floor(playerHP);
-                    vb.destroy(); vBullets.splice(j, 1);
-                    player.setAlpha(0.5); this.time.delayedCall(100, () => player.setAlpha(1));
-                    if (playerHP <= 0) morirBit(this);
-                }
-            });
-
-            // UI
-            pHealthBar.setPosition(player.x, player.y - 30).width = (playerHP/60)*40;
-            superBar.setPosition(player.x, player.y - 25).width = (superCharge/10)*40;
-            for(let i=0; i<3; i++) { ammoBars[i].setPosition(player.x-15+(i*15), player.y-18); ammoBars[i].visible=(i<ammo); }
-            if (time > nextAmmo && ammo < 3) { ammo++; nextAmmo = time + 1000; }
-        }
-
-        function morirVirus(scene) {
-            gameEnded = true;
-            for(let i=0; i<20; i++) {
-                let p = scene.add.rectangle(CX, CY, 10, 10, 0xff003c);
-                scene.physics.add.existing(p);
-                p.body.setVelocity(Phaser.Math.Between(-400, 400), Phaser.Math.Between(-400, 400));
-                scene.tweens.add({ targets: p, alpha: 0, duration: 1500, onComplete: () => p.destroy() });
-            }
-            virus.destroy(); vHealthBar.destroy(); vHealthBG.destroy();
-            document.getElementById('super-hint').innerText = "¡SISTEMA PURGADO!";
-            document.getElementById('super-hint').style.display = 'block';
-            scene.cameras.main.flash(500, 255, 0, 60);
-        }
-
-        function morirBit(scene) {
-            gameEnded = true;
-            scene.time.addEvent({
-                delay: 40, repeat: 15,
-                callback: () => {
-                    player.x += Phaser.Math.Between(-20, 20);
-                    player.fillColor = (Math.random() > 0.5) ? 0xffffff : 0xff003c;
-                    player.scaleX = Math.random() * 3;
-                }
-            });
-            scene.cameras.main.shake(500, 0.05);
-            scene.time.delayedCall(1000, () => location.reload());
-        }
-
-        function lanzarSuper(scene) {
-            superCharge = 0; document.getElementById('super-hint').style.display = 'none';
-            let onda = scene.add.circle(player.x, player.y, 10, 0xff00ff, 0.4).setDepth(1);
-            if (virus && Phaser.Math.Distance.Between(player.x, player.y, CX, CY) < 600) {
-                virusHP -= 5;
-                showDamage(scene, CX, CY, "-5", "#ff00ff", '80px'); 
-                vHealthBar.width = Math.max(0, (virusHP / 50) * 60);
-                if (virusHP <= 0) morirVirus(scene);
-            }
-            vBullets.forEach(vb => vb.destroy()); vBullets = [];
-            scene.tweens.add({ targets: onda, radius: 600, alpha: 0, duration: 600, onComplete: () => onda.destroy() });
-        }
+        new Phaser.Game(config);
     </script>
 </body>
 </html>
