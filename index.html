@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>CORE ARENA - Orbital AI</title>
+    <title>CORE ARENA - Relentless Hunter AI</title>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-arcade-physics.min.js"></script>
     <style>
         body { margin: 0; background-color: #050505; color: #00ff41; font-family: 'Courier New', monospace; overflow: hidden; display: flex; flex-direction: column; align-items: center; }
@@ -43,7 +43,7 @@
             balas = this.physics.add.group();
             viruses = this.physics.add.group();
 
-            player = this.add.rectangle(CX + 400, CY + 100, 24, 24, 0x00ff41).setDepth(10);
+            player = this.add.rectangle(CX + 350, CY, 24, 24, 0x00ff41).setDepth(10);
             this.physics.add.existing(player);
             player.body.setCircle(12);
             
@@ -58,11 +58,11 @@
                 b.destroy(); v.destroy();
                 kills = Math.min(5, kills + 1);
                 document.getElementById('sCount').innerText = kills;
-                this.time.delayedCall(1500, () => spawnVirus(this));
+                this.time.delayedCall(1200, () => spawnVirus(this));
             });
 
             this.physics.add.overlap(player, viruses, (p, v) => {
-                playerHP -= 0.5; 
+                playerHP -= 0.6; 
                 lastActionTime = this.time.now;
                 if(playerHP <= 0) this.scene.restart();
             });
@@ -89,7 +89,7 @@
         function spawnVirus(scene) {
             let v = scene.add.triangle(CX, CY, 0, 24, 12, 0, 24, 24, 0xff003c);
             scene.physics.add.existing(v);
-            v.body.setCircle(12);
+            v.body.setCircle(10);
             viruses.add(v);
         }
 
@@ -97,8 +97,8 @@
             gfx.clear();
             gfx.lineStyle(6, 0x00ff41, 1);
             rings.forEach(ring => {
-                let start = Phaser.Math.DegToRad(ring.gap + 40);
-                let end = Phaser.Math.DegToRad(ring.gap + 320);
+                let start = Phaser.Math.DegToRad(ring.gap + 38);
+                let end = Phaser.Math.DegToRad(ring.gap + 322);
                 gfx.beginPath(); gfx.arc(CX, CY, ring.r, start, end, false); gfx.strokePath();
             });
 
@@ -114,36 +114,33 @@
             }
             document.getElementById('hpText').innerText = Math.floor(playerHP);
 
-            // --- NUEVA IA ORBITAL ---
+            // IA VIRUS MEJORADA (DESLIZAMIENTO TANGENCIAL)
             viruses.getChildren().forEach(v => {
                 const distV = Phaser.Math.Distance.Between(v.x, v.y, CX, CY);
-                const distP = Phaser.Math.Distance.Between(player.x, player.y, CX, CY);
                 const angleV = Phaser.Math.Angle.WrapDegrees(Phaser.Math.RadToDeg(Phaser.Math.Angle.Between(CX, CY, v.x, v.y)));
                 
-                // Encontrar anillo actual del virus
-                let vRing = rings.slice().reverse().find(r => distV > r.r - 25);
-                let pRing = rings.slice().reverse().find(r => distP > r.r - 25);
+                let vx = player.x - v.x;
+                let vy = player.y - v.y;
+                let mag = Math.sqrt(vx*vx + vy*vy);
+                vx /= mag; vy /= mag;
 
-                if (vRing && vRing !== pRing) {
-                    // El virus está en un anillo diferente: buscar el GAP
-                    let diffAngle = Phaser.Math.Angle.WrapDegrees(angleV - vRing.gap);
-                    
-                    if (Math.abs(diffAngle) < 15) {
-                        // Está en la puerta: Moverse radialmente (hacia adentro o afuera)
-                        let speed = (distP > distV) ? 200 : -200;
-                        let rad = Phaser.Math.DegToRad(angleV);
-                        v.body.setVelocity(Math.cos(rad) * speed, Math.sin(rad) * speed);
-                    } else {
-                        // No está en la puerta: Orbitar el anillo
-                        let orbitSpeed = (diffAngle > 0) ? -200 : 200;
-                        let tangent = Phaser.Math.DegToRad(angleV + 90);
-                        v.body.setVelocity(Math.cos(tangent) * orbitSpeed, Math.sin(tangent) * orbitSpeed);
+                // Detectar si el movimiento hacia el jugador chocaría con un muro
+                rings.forEach(r => {
+                    if (Math.abs(distV - r.r) < 25) { // Si el virus está cerca de un anillo
+                        let diff = Math.abs(angleV - r.gap);
+                        if (diff > 180) diff = 360 - diff;
+                        
+                        if (diff > 35) { // Hay muro
+                            // Forzar movimiento lateral (tangente al círculo) para encontrar la salida
+                            let tangentAngle = Phaser.Math.DegToRad(angleV + (angleV < r.gap ? -90 : 90));
+                            vx = Math.cos(tangentAngle);
+                            vy = Math.sin(tangentAngle);
+                        }
                     }
-                } else {
-                    // Mismo anillo o zona libre: Persecución directa
-                    this.physics.moveToObject(v, player, 230);
-                }
-                v.rotation = Phaser.Math.Angle.Between(0, 0, v.body.velocity.x, v.body.velocity.y) + Math.PI/2;
+                });
+
+                v.body.setVelocity(vx * 230, vy * 230);
+                v.rotation = Phaser.Math.Angle.Between(0, 0, vx, vy) + Math.PI/2;
             });
 
             // Colisiones Físicas
@@ -158,8 +155,8 @@
                         if (diff > 35) {
                             const p = (d > r.r) ? 1 : -1;
                             const rad = Phaser.Math.DegToRad(a);
-                            obj.x = CX + Math.cos(rad) * (r.r + (22 * p));
-                            obj.y = CY + Math.sin(rad) * (r.r + (22 * p));
+                            obj.x = CX + Math.cos(rad) * (r.r + (24 * p));
+                            obj.y = CY + Math.sin(rad) * (r.r + (24 * p));
                         }
                     }
                 });
