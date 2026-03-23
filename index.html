@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>CORE ARENA - Glitch Transition Fixed</title>
+    <title>CORE ARENA - Fractal Overdrive</title>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-arcade-physics.min.js"></script>
     <style>
         body { margin: 0; background-color: #020205; display: flex; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
@@ -11,8 +11,8 @@
 </head>
 <body>
     <div id="game-ui">
-        <h1 style="margin:0; color:#00ff41; text-shadow: 0 0 10px #00ff41;">[ CORE ARENA ]</h1>
-        <p style="color:#00e5ff; font-weight: bold;">BIT_HP: <span id="hpText">60</span>% | <span id="super-hint" style="color:#ff00ff; display:none;">!! SÚPER LISTO [ESPACIO] !!</span></p>
+        <h1 style="margin:0; color:#00ff41; text-shadow: 0 0 15px #00ff41;">[ CORE ARENA ]</h1>
+        <p style="color:#00e5ff; font-weight: bold;">BIT_INTEGRITY: <span id="hpText">60</span>% | <span id="super-hint" style="color:#ff00ff; display:none; text-shadow: 0 0 20px #ff00ff;">> SINGULARITY_READY [SPACE] <</span></p>
     </div>
 
     <script>
@@ -21,35 +21,23 @@
             create() {
                 const { width, height } = this.scale;
                 this.gfx = this.add.graphics().setDepth(10);
-                
-                this.title = this.add.text(width/2, height/2 - 50, 'CORE ARENA', { 
-                    fontSize: '80px', color: '#00ff41', fontFamily: 'Courier New', fontWeight: 'bold' 
-                }).setOrigin(0.5);
-
-                let btn = this.add.rectangle(width/2, height/2 + 50, 300, 60, 0x00ff41, 0.1).setStrokeStyle(2, 0x00ff41).setInteractive({useHandCursor:true});
-                let btnText = this.add.text(width/2, height/2 + 50, 'INICIAR SISTEMA', { fontSize: '24px', color: '#00ff41', fontFamily: 'Courier New' }).setOrigin(0.5);
+                this.title = this.add.text(width/2, height/2 - 50, 'CORE ARENA', { fontSize: '80px', color: '#00ff41', fontFamily: 'Courier New', fontWeight: 'bold' }).setOrigin(0.5);
+                let btn = this.add.rectangle(width/2, height/2 + 50, 320, 70, 0x00ff41, 0.1).setStrokeStyle(3, 0x00ff41).setInteractive({useHandCursor:true});
+                let btnText = this.add.text(width/2, height/2 + 50, 'INITIALIZE_CORE', { fontSize: '24px', color: '#00ff41', fontFamily: 'Courier New' }).setOrigin(0.5);
                 
                 btn.on('pointerdown', () => {
-                    // --- EFECTO DE GLITCH DE TRANSICIÓN ---
-                    btn.setVisible(false);
-                    btnText.setVisible(false);
+                    btn.setVisible(false); btnText.setVisible(false);
                     this.cameras.main.shake(800, 0.04);
-                    
                     this.time.addEvent({
-                        delay: 50,
-                        repeat: 16,
+                        delay: 50, repeat: 16,
                         callback: () => {
                             this.gfx.clear();
                             for(let i=0; i<15; i++) {
-                                const colors = [0x00ff41, 0xffffff, 0xff003c, 0x00e5ff];
-                                this.gfx.fillStyle(colors[Math.floor(Math.random()*colors.length)], 0.6);
-                                this.gfx.fillRect(0, Math.random()*height, width, Math.random()*60);
+                                this.gfx.fillStyle([0x00ff41, 0xffffff, 0xff003c][Math.floor(Math.random()*3)], 0.6);
+                                this.gfx.fillRect(0, Math.random()*height, width, Math.random()*80);
                             }
-                            this.title.setX(width/2 + Math.random()*20 - 10);
-                            this.title.setTint(Math.random()*0xffffff);
                         }
                     });
-
                     this.time.delayedCall(900, () => {
                         document.getElementById('game-ui').style.display = 'block';
                         this.scene.start('GameScene');
@@ -66,74 +54,84 @@
                 this.gameEnded = false; this.pBullets = []; this.vBullets = [];
                 this.nextAmmo = 0; this.lastVShot = 0;
                 this.CX = 800; this.CY = 600;
-                this.rings = [{ r: 180, g: 0 }, { r: 350, g: 90 }, { r: 520, g: 180 }];
+                this.rings = [{ r: 190, g: 0 }, { r: 360, g: 90 }, { r: 540, g: 180 }];
 
                 this.physics.world.setBounds(0, 0, 1600, 1200);
-                this.gfx = this.add.graphics();
+                this.gfxWalls = this.add.graphics();
                 this.add.grid(800, 600, 2400, 2400, 64, 64, 0x00e5ff, 0.05).setDepth(-1);
 
-                this.player = this.add.rectangle(this.CX + 400, this.CY, 24, 24, 0x00ff41).setDepth(10);
+                // Bit
+                this.player = this.add.rectangle(this.CX + 450, this.CY, 24, 24, 0x00ff41).setDepth(10);
                 this.physics.add.existing(this.player);
-                this.pHealthBar = this.add.rectangle(0, 0, 40, 5, 0x00ff00).setDepth(20);
-                this.pSuperBar = this.add.rectangle(0, 0, 40, 3, 0xff00ff).setDepth(20);
-                this.ammoBars = [];
-                for(let i=0; i<3; i++) this.ammoBars[i] = this.add.rectangle(0, 0, 10, 4, 0x00e5ff).setDepth(20);
+                
+                // Barras UI de Bit
+                this.pHealthBar = this.add.rectangle(0, 0, 44, 6, 0x00ff00).setDepth(20);
+                this.pSuperBar = this.add.rectangle(0, 0, 44, 4, 0xff00ff).setDepth(20);
 
+                // Virus
                 this.virus = this.add.triangle(this.CX, this.CY, 0, 80, 40, 0, 80, 80, 0xff003c).setDepth(5);
-                this.vHealthBar = this.add.rectangle(this.CX, this.CY - 100, 100, 10, 0xff003c).setDepth(6);
+                this.vHealthBar = this.add.rectangle(this.CX, this.CY - 110, 120, 12, 0xff003c).setDepth(6);
 
                 this.cameras.main.setBounds(0, 0, 1600, 1200).setZoom(0.8).startFollow(this.player, true, 0.1, 0.1);
                 this.keys = this.input.keyboard.addKeys('W,A,S,D,SPACE');
-                this.input.on('pointerdown', (p) => this.shoot(p));
-                
-                document.getElementById('hpText').innerText = "60";
-                document.getElementById('super-hint').style.display = 'none';
+                this.input.on('pointerdown', (p) => this.fireFractal(p));
             }
 
             update(time) {
                 if (this.gameEnded) return;
                 this.drawGlitchWalls();
 
+                // Movimiento
                 let cursors = this.input.keyboard.createCursorKeys();
                 this.player.body.setVelocity(0);
-                if (this.keys.A.isDown || cursors.left.isDown) this.player.body.setVelocityX(-400);
-                else if (this.keys.D.isDown || cursors.right.isDown) this.player.body.setVelocityX(400);
-                if (this.keys.W.isDown || cursors.up.isDown) this.player.body.setVelocityY(-400);
-                else if (this.keys.S.isDown || cursors.down.isDown) this.player.body.setVelocityY(400);
+                if (this.keys.A.isDown || cursors.left.isDown) this.player.body.setVelocityX(-450);
+                else if (this.keys.D.isDown || cursors.right.isDown) this.player.body.setVelocityX(450);
+                if (this.keys.W.isDown || cursors.up.isDown) this.player.body.setVelocityY(-450);
+                else if (this.keys.S.isDown || cursors.down.isDown) this.player.body.setVelocityY(450);
 
+                // Colisiones Muros
                 let d = Phaser.Math.Distance.Between(this.player.x, this.player.y, this.CX, this.CY);
                 let ang = Phaser.Math.Angle.Between(this.CX, this.CY, this.player.x, this.player.y);
                 let deg = Phaser.Math.Angle.WrapDegrees(Phaser.Math.RadToDeg(ang));
                 this.rings.forEach(r => {
-                    if (Math.abs(d - r.r) < 20) {
+                    if (Math.abs(d - r.r) < 25) {
                         let diff = Math.abs(deg - r.g);
                         if (diff > 180) diff = 360 - diff;
-                        if (diff > 40) {
-                            let push = (d > r.r) ? r.r + 21 : r.r - 21;
+                        if (diff > 42) {
+                            let push = (d > r.r) ? r.r + 26 : r.r - 26;
                             this.player.x = this.CX + Math.cos(ang) * push;
                             this.player.y = this.CY + Math.sin(ang) * push;
                         }
                     }
                 });
 
-                if (Phaser.Input.Keyboard.JustDown(this.keys.SPACE) && this.superCharge >= 10) this.lanzarSuper();
-                if (time > this.nextAmmo && this.ammo < 3) { this.ammo++; this.nextAmmo = time + 1000; }
+                if (Phaser.Input.Keyboard.JustDown(this.keys.SPACE) && this.superCharge >= 10) this.singularitySuper();
+                if (time > this.nextAmmo && this.ammo < 3) { this.ammo++; this.nextAmmo = time + 800; }
 
-                if (this.virus.active && time > this.lastVShot + 1200) {
+                // IA Virus (Ataques en Ráfaga)
+                if (this.virus.active && time > this.lastVShot + 1400) {
                     this.lastVShot = time;
-                    let vb = this.add.circle(this.CX, this.CY, 10, 0xff003c).setStrokeStyle(2, 0xffffff);
-                    let a = Phaser.Math.Angle.Between(this.CX, this.CY, this.player.x, this.player.y);
-                    vb.vx = Math.cos(a) * 8; vb.vy = Math.sin(a) * 8;
-                    this.vBullets.push(vb);
+                    for(let i=-1; i<=1; i++) {
+                        let vb = this.add.rectangle(this.CX, this.CY, 12, 12, 0xff003c).setRotation(0.7).setStrokeStyle(2, 0xffffff);
+                        let a = Phaser.Math.Angle.Between(this.CX, this.CY, this.player.x, this.player.y) + (i*0.2);
+                        vb.vx = Math.cos(a) * 9; vb.vy = Math.sin(a) * 9;
+                        this.vBullets.push(vb);
+                    }
                 }
 
+                // Procesar Balas Fractal de Bit
                 this.pBullets.forEach((b, i) => {
-                    b.x += b.vx; b.y += b.vy;
-                    if (this.virus.active && Phaser.Math.Distance.Between(b.x, b.y, this.CX, this.CY) < 50) {
-                        this.showDmg(this.CX, this.CY, "-1", "#00e5ff", "30px");
+                    b.x += b.vx; b.y += b.vy; b.rotation += 0.2;
+                    // Estela
+                    if (time % 100 < 20) {
+                        let ghost = this.add.rectangle(b.x, b.y, 16, 16, 0x00e5ff, 0.3).setRotation(b.rotation);
+                        this.tweens.add({ targets: ghost, alpha: 0, duration: 300, onComplete: () => ghost.destroy() });
+                    }
+                    if (this.virus.active && Phaser.Math.Distance.Between(b.x, b.y, this.CX, this.CY) < 55) {
+                        this.createImpact(b.x, b.y, 0x00e5ff);
                         b.destroy(); this.pBullets.splice(i, 1);
                         this.virusHP--;
-                        this.vHealthBar.width = (this.virusHP / 50) * 100;
+                        this.vHealthBar.width = (this.virusHP / 50) * 120;
                         if (this.superCharge < 10) { 
                             this.superCharge++; 
                             if(this.superCharge >= 10) document.getElementById('super-hint').style.display = 'inline';
@@ -142,91 +140,89 @@
                     }
                 });
 
+                // Procesar Balas Virus
                 this.vBullets.forEach((vb, i) => {
-                    vb.x += vb.vx; vb.y += vb.vy;
+                    vb.x += vb.vx; vb.y += vb.vy; vb.rotation += 0.1;
                     if (Phaser.Math.Distance.Between(vb.x, vb.y, this.player.x, this.player.y) < 25) {
-                        this.showDmg(this.player.x, this.player.y, "-10", "#ff003c", "40px");
+                        this.createImpact(vb.x, vb.y, 0xff003c);
                         this.playerHP -= 10;
                         document.getElementById('hpText').innerText = this.playerHP;
                         vb.destroy(); this.vBullets.splice(i, 1);
-                        this.cameras.main.shake(150, 0.01);
+                        this.cameras.main.shake(200, 0.015);
                         if (this.playerHP <= 0) this.lose();
                     }
                 });
 
-                this.pHealthBar.setPosition(this.player.x, this.player.y - 35).width = (this.playerHP/60)*40;
-                this.pSuperBar.setPosition(this.player.x, this.player.y - 30).width = (this.superCharge/10)*40;
-                this.ammoBars.forEach((ab, i) => {
-                    ab.setPosition(this.player.x - 15 + (i * 15), this.player.y - 25);
-                    ab.visible = (i < this.ammo);
-                });
+                // Update Barras UI
+                this.pHealthBar.setPosition(this.player.x, this.player.y - 40).width = (this.playerHP/60)*44;
+                this.pSuperBar.setPosition(this.player.x, this.player.y - 32).width = (this.superCharge/10)*44;
             }
 
             drawGlitchWalls() {
-                this.gfx.clear();
+                this.gfxWalls.clear();
                 this.rings.forEach(r => {
-                    this.gfx.lineStyle(25, 0x00e5ff, 0.1).beginPath().arc(this.CX, this.CY, r.r, Phaser.Math.DegToRad(r.g + 45), Phaser.Math.DegToRad(r.g + 315)).strokePath();
-                    this.gfx.lineStyle(15, 0x00e5ff, 0.8).beginPath().arc(this.CX, this.CY, r.r, Phaser.Math.DegToRad(r.g + 40), Phaser.Math.DegToRad(r.g + 320)).strokePath();
-                    if (Math.random() > 0.85) {
-                        this.gfx.lineStyle(4, 0xffffff, 0.6).beginPath().arc(this.CX, this.CY, r.r + (Math.random()*8-4), Phaser.Math.DegToRad(r.g + 40), Phaser.Math.DegToRad(r.g + 320)).strokePath();
-                    }
+                    this.gfxWalls.lineStyle(25, 0x00e5ff, 0.1).beginPath().arc(this.CX, this.CY, r.r, Phaser.Math.DegToRad(r.g + 45), Phaser.Math.DegToRad(r.g + 315)).strokePath();
+                    this.gfxWalls.lineStyle(18, 0x00e5ff, 0.8).beginPath().arc(this.CX, this.CY, r.r, Phaser.Math.DegToRad(r.g + 40), Phaser.Math.DegToRad(r.g + 320)).strokePath();
                 });
             }
 
-            shoot(p) {
+            fireFractal(p) {
                 if (this.ammo > 0 && !this.gameEnded) {
                     this.ammo--;
                     let pWorld = p.positionToCamera(this.cameras.main);
-                    let b = this.add.circle(this.player.x, this.player.y, 6, 0x00e5ff).setStrokeStyle(2, 0xffffff);
+                    // Disparo en forma de Rombo
+                    let b = this.add.rectangle(this.player.x, this.player.y, 16, 16, 0x00e5ff).setRotation(0.7).setStrokeStyle(2, 0xffffff);
                     let a = Phaser.Math.Angle.Between(this.player.x, this.player.y, pWorld.x, pWorld.y);
-                    b.vx = Math.cos(a) * 20; b.vy = Math.sin(a) * 20;
+                    b.vx = Math.cos(a) * 22; b.vy = Math.sin(a) * 22;
                     this.pBullets.push(b);
                 }
             }
 
-            showDmg(x, y, txt, col, size) {
-                let t = this.add.text(x, y - 40, txt, { fontFamily: 'Arial Black', fontSize: size, color: col }).setOrigin(0.5);
-                this.tweens.add({ targets: t, y: y - 120, alpha: 0, duration: 800, onComplete: () => t.destroy() });
+            createImpact(x, y, color) {
+                for(let i=0; i<8; i++) {
+                    let p = this.add.rectangle(x, y, 6, 6, color);
+                    this.physics.add.existing(p);
+                    p.body.setVelocity(Phaser.Math.Between(-300, 300), Phaser.Math.Between(-300, 300));
+                    this.tweens.add({ targets: p, alpha: 0, scale: 0, duration: 600, onComplete: () => p.destroy() });
+                }
             }
 
-            lanzarSuper() {
+            singularitySuper() {
                 this.superCharge = 0; document.getElementById('super-hint').style.display = 'none';
-                let o = this.add.circle(this.player.x, this.player.y, 10, 0xff00ff, 0.4).setDepth(1);
-                this.vBullets.forEach(v => v.destroy()); this.vBullets = [];
-                if (Phaser.Math.Distance.Between(this.player.x, this.player.y, this.CX, this.CY) < 600) {
-                    this.virusHP -= 8;
-                    this.vHealthBar.width = Math.max(0, (this.virusHP / 50) * 100);
-                    this.showDmg(this.CX, this.CY, "-8", "#ff00ff", "70px");
+                this.cameras.main.flash(400, 255, 255, 255);
+                this.cameras.main.shake(500, 0.03);
+
+                // Efecto de Rayo Singularidad
+                let beam = this.add.graphics();
+                beam.lineStyle(80, 0xff00ff, 0.5);
+                beam.beginPath().moveTo(this.player.x, this.player.y).lineTo(this.CX, this.CY).strokePath();
+                beam.lineStyle(20, 0xffffff, 0.9);
+                beam.beginPath().moveTo(this.player.x, this.player.y).lineTo(this.CX, this.CY).strokePath();
+
+                this.vBullets.forEach(v => { this.createImpact(v.x, v.y, 0xffffff); v.destroy(); });
+                this.vBullets = [];
+
+                if (Phaser.Math.Distance.Between(this.player.x, this.player.y, this.CX, this.CY) < 700) {
+                    this.virusHP -= 10;
+                    this.vHealthBar.width = Math.max(0, (this.virusHP / 50) * 120);
                     if (this.virusHP <= 0) this.win();
                 }
-                this.tweens.add({ targets: o, radius: 600, alpha: 0, duration: 600, onComplete: () => o.destroy() });
+
+                this.tweens.add({ targets: beam, alpha: 0, duration: 500, onComplete: () => beam.destroy() });
             }
 
             win() {
                 this.gameEnded = true;
-                for(let i=0; i<30; i++) {
-                    let p = this.add.rectangle(this.CX, this.CY, 15, 15, 0xff003c);
-                    this.physics.add.existing(p);
-                    p.body.setVelocity(Phaser.Math.Between(-600, 600), Phaser.Math.Between(-600, 600));
-                    this.tweens.add({ targets: p, alpha: 0, scale: 0, duration: 1500, onComplete: () => p.destroy() });
-                }
-                this.virus.destroy();
-                this.add.text(this.CX, this.CY, 'SISTEMA PURGADO', { fontSize: '60px', color: '#00ff41', fontFamily: 'Courier New' }).setOrigin(0.5);
+                this.cameras.main.flash(1000, 0, 255, 65);
+                this.add.text(this.CX, this.CY, 'SYSTEM PURGED', { fontSize: '70px', color: '#00ff41', fontFamily: 'Courier New', fontWeight: 'bold' }).setOrigin(0.5).setShadow(0, 0, '#00ff41', 20);
                 this.time.delayedCall(3000, () => location.reload());
             }
 
             lose() {
                 this.gameEnded = true;
-                this.cameras.main.shake(600, 0.05);
-                this.time.addEvent({
-                    delay: 40, repeat: 20,
-                    callback: () => {
-                        this.player.x += Phaser.Math.Between(-30, 30);
-                        this.player.fillColor = (Math.random() > 0.5) ? 0xffffff : 0xff003c;
-                        this.player.scaleX = Math.random() * 5;
-                    }
-                });
-                this.time.delayedCall(1500, () => location.reload());
+                this.cameras.main.shake(800, 0.05);
+                this.add.text(this.CX, this.CY, 'CONNECTION LOST', { fontSize: '70px', color: '#ff003c', fontFamily: 'Courier New' }).setOrigin(0.5);
+                this.time.delayedCall(2000, () => location.reload());
             }
         }
 
