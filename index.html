@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>CORE ARENA - Glitch Transition</title>
+    <title>CORE ARENA - Full FX Edition</title>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-arcade-physics.min.js"></script>
     <style>
         body { margin: 0; background-color: #050505; color: #00ff41; font-family: 'Courier New', monospace; display: flex; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
@@ -12,28 +12,22 @@
 </head>
 <body>
     <div id="game-ui">
-        <h1 style="margin:0; color:#00ff41;">[ CORE ARENA ]</h1>
-        <p style="color:#00e5ff;">BIT HP: <span id="hpText">60</span> | <span id="super-hint" style="color:#ff00ff; display:none;">¡SÚPER CARGADO!</span></p>
+        <h1 style="margin:0; color:#00ff41; text-shadow: 0 0 10px #00ff41;">[ CORE ARENA ]</h1>
+        <p style="color:#00e5ff;">BIT HP: <span id="hpText">60</span> | <span id="super-hint" style="color:#ff00ff; display:none; font-weight:bold;">¡SÚPER CARGADO! [ESPACIO]</span></p>
     </div>
 
     <script>
         class MenuScene extends Phaser.Scene {
             constructor() { super('MenuScene'); }
-
             create() {
                 const { width, height } = this.scale;
                 this.isGlitching = false;
+                this.gfx = this.add.graphics();
 
-                // Título
                 this.title = this.add.text(width/2, height/2 - 80, 'CORE ARENA', {
                     fontFamily: 'Courier New', fontSize: '80px', fontWeight: 'bold', color: '#00ff41'
                 }).setOrigin(0.5);
 
-                this.subtitle = this.add.text(width/2, height/2 - 20, 'V 1.0.5 - ENCRYPTED', {
-                    fontFamily: 'Courier New', fontSize: '18px', color: '#00e5ff'
-                }).setOrigin(0.5);
-
-                // Botón
                 this.playBtn = this.add.rectangle(width/2, height/2 + 80, 280, 60, 0x00ff41, 0.1)
                     .setInteractive({ useHandCursor: true }).setStrokeStyle(2, 0x00ff41);
 
@@ -41,58 +35,29 @@
                     fontFamily: 'Courier New', fontSize: '24px', color: '#00ff41'
                 }).setOrigin(0.5);
 
-                // Efectos de Botón
-                this.playBtn.on('pointerover', () => { this.playBtn.setFillStyle(0x00ff41, 0.3); });
-                this.playBtn.on('pointerout', () => { this.playBtn.setFillStyle(0x00ff41, 0.1); });
-                
-                this.playBtn.on('pointerdown', () => this.startGlitchTransition());
-
-                this.gfx = this.add.graphics();
-            }
-
-            startGlitchTransition() {
-                if (this.isGlitching) return;
-                this.isGlitching = true;
-                this.playBtn.setVisible(false);
-                this.playText.setVisible(false);
-
-                // Sacudida de cámara
-                this.cameras.main.shake(800, 0.03);
-
-                // Evento de tiempo para los flashes de glitch
-                this.time.addEvent({
-                    delay: 50,
-                    repeat: 15,
-                    callback: () => {
-                        this.gfx.clear();
-                        // Dibujar barras locas de colores
-                        for(let i=0; i<8; i++) {
-                            let color = [0x00ff41, 0xffffff, 0xff003c, 0x00e5ff][Math.floor(Math.random()*4)];
-                            this.gfx.fillStyle(color, 0.6);
-                            this.gfx.fillRect(0, Math.random()*550, 1000, Math.random()*40);
+                this.playBtn.on('pointerdown', () => {
+                    this.isGlitching = true;
+                    this.playBtn.setVisible(false);
+                    this.playText.setVisible(false);
+                    this.cameras.main.shake(800, 0.04);
+                    
+                    this.time.addEvent({
+                        delay: 40, repeat: 20,
+                        callback: () => {
+                            this.gfx.clear();
+                            for(let i=0; i<10; i++) {
+                                this.gfx.fillStyle([0x00ff41, 0xffffff, 0xff003c][Math.floor(Math.random()*3)], 0.7);
+                                this.gfx.fillRect(0, Math.random()*550, 1000, Math.random()*50);
+                            }
+                            this.title.setTint(Math.random()*0xffffff).setX(500 + Math.random()*30 - 15);
                         }
-                        // Mover el título aleatoriamente
-                        this.title.x = 500 + Math.random()*20 - 10;
-                        this.title.setTint(Math.random() * 0xffffff);
-                    }
-                });
+                    });
 
-                // Cambio de escena tras el glitch
-                this.time.delayedCall(850, () => {
-                    document.getElementById('game-ui').style.display = 'block';
-                    this.scene.start('GameScene');
+                    this.time.delayedCall(900, () => {
+                        document.getElementById('game-ui').style.display = 'block';
+                        this.scene.start('GameScene');
+                    });
                 });
-            }
-
-            update() {
-                if (!this.isGlitching) {
-                    // Lluvia de datos suave de fondo
-                    this.gfx.clear();
-                    this.gfx.fillStyle(0x00ff41, 0.1);
-                    for(let i=0; i<5; i++) {
-                        this.gfx.fillRect(Math.random()*1000, Math.random()*550, 2, 15);
-                    }
-                }
             }
         }
 
@@ -102,7 +67,6 @@
             create() {
                 this.playerHP = 60; this.virusHP = 50; this.superCharge = 0; this.ammo = 3;
                 this.gameEnded = false; this.pBullets = []; this.vBullets = [];
-                this.lastVShot = 0; this.nextAmmo = 0;
                 this.CX = 800; this.CY = 600;
                 this.rings = [{ r: 160, g: 0 }, { r: 330, g: 90 }, { r: 500, g: 180 }];
 
@@ -123,17 +87,6 @@
 
                 this.cameras.main.setBounds(0, 0, 1600, 1200).setZoom(0.8).startFollow(this.player, true, 0.1, 0.1);
                 this.input.on('pointerdown', (p) => this.shoot(p));
-            }
-
-            shoot(pointer) {
-                if (this.ammo > 0 && !this.gameEnded) {
-                    this.ammo--;
-                    let pWorld = pointer.positionToCamera(this.cameras.main);
-                    let b = this.add.circle(this.player.x, this.player.y, 5, 0x00e5ff);
-                    let ang = Phaser.Math.Angle.Between(this.player.x, this.player.y, pWorld.x, pWorld.y);
-                    b.vx = Math.cos(ang) * 18; b.vy = Math.sin(ang) * 18;
-                    this.pBullets.push(b);
-                }
             }
 
             update(time) {
@@ -172,7 +125,8 @@
 
                 if (Phaser.Input.Keyboard.JustDown(this.keys.SPACE) && this.superCharge >= 10) this.lanzarSuper();
 
-                if (time > this.lastVShot + 1200) {
+                // Balas Jefe
+                if (this.virus.active && time > this.lastVShot + 1200) {
                     this.lastVShot = time;
                     let vb = this.add.circle(this.CX, this.CY, 8, 0xff003c);
                     let a = Phaser.Math.Angle.Between(this.CX, this.CY, this.player.x, this.player.y);
@@ -212,6 +166,17 @@
                 if (time > this.nextAmmo && this.ammo < 3) { this.ammo++; this.nextAmmo = time + 1000; }
             }
 
+            shoot(pointer) {
+                if (this.ammo > 0 && !this.gameEnded) {
+                    this.ammo--;
+                    let pWorld = pointer.positionToCamera(this.cameras.main);
+                    let b = this.add.circle(this.player.x, this.player.y, 5, 0x00e5ff);
+                    let ang = Phaser.Math.Angle.Between(this.player.x, this.player.y, pWorld.x, pWorld.y);
+                    b.vx = Math.cos(ang) * 18; b.vy = Math.sin(ang) * 18;
+                    this.pBullets.push(b);
+                }
+            }
+
             showDmg(x, y, txt, col, size) {
                 let t = this.add.text(x, y - 40, txt, { fontFamily: 'Arial Black', fontSize: size, color: col }).setOrigin(0.5);
                 this.tweens.add({ targets: t, y: y - 120, alpha: 0, duration: 1000, onComplete: () => t.destroy() });
@@ -224,6 +189,7 @@
                     this.virusHP -= 5;
                     this.showDmg(this.CX, this.CY, "-5", "#ff00ff", '80px');
                     this.vHealthBar.width = Math.max(0, (this.virusHP / 50) * 60);
+                    if (this.virusHP <= 0) this.win();
                 }
                 this.vBullets.forEach(v => v.destroy()); this.vBullets = [];
                 this.tweens.add({ targets: o, radius: 600, alpha: 0, duration: 600, onComplete: () => o.destroy() });
@@ -231,15 +197,31 @@
 
             win() {
                 this.gameEnded = true;
+                // ANIMACIÓN DE EXPLOSIÓN REINTEGRADA
+                for(let i=0; i<25; i++) {
+                    let p = this.add.rectangle(this.CX, this.CY, 12, 12, 0xff003c);
+                    this.physics.add.existing(p);
+                    p.body.setVelocity(Phaser.Math.Between(-500, 500), Phaser.Math.Between(-500, 500));
+                    this.tweens.add({ targets: p, alpha: 0, scale: 0, duration: 1500, onComplete: () => p.destroy() });
+                }
                 this.virus.destroy(); this.vHealthBar.destroy();
-                this.add.text(this.player.x, this.player.y - 100, 'SISTEMA PURGADO', { fontSize: '40px', color: '#00ff41' }).setOrigin(0.5);
-                this.time.delayedCall(2000, () => { document.getElementById('game-ui').style.display = 'none'; this.scene.start('MenuScene'); });
+                this.add.text(this.CX, this.CY, 'SISTEMA PURGADO', { fontSize: '60px', color: '#00ff41', fontFamily: 'Courier New' }).setOrigin(0.5);
+                this.time.delayedCall(2500, () => { document.getElementById('game-ui').style.display = 'none'; this.scene.start('MenuScene'); });
             }
 
             lose() {
                 this.gameEnded = true;
-                this.cameras.main.shake(500, 0.05);
-                this.time.delayedCall(1000, () => { document.getElementById('game-ui').style.display = 'none'; this.scene.start('MenuScene'); });
+                this.cameras.main.shake(600, 0.05);
+                // ANIMACIÓN DE GLITCH BIT REINTEGRADA
+                this.time.addEvent({
+                    delay: 40, repeat: 15,
+                    callback: () => {
+                        this.player.x += Phaser.Math.Between(-25, 25);
+                        this.player.fillColor = (Math.random() > 0.5) ? 0xffffff : 0xff003c;
+                        this.player.scaleX = Math.random() * 4;
+                    }
+                });
+                this.time.delayedCall(1200, () => { document.getElementById('game-ui').style.display = 'none'; this.scene.start('MenuScene'); });
             }
         }
 
